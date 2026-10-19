@@ -1,7 +1,7 @@
 # BÁO CÁO TOÀN DIỆN HỆ THỐNG XỬ LÝ ẢNH NGOẠI CẢNH THIẾU SÁNG
 ## A Comparative Study of Traditional Image Processing Techniques in Enhancing Low-Light Outdoor Landscape Images
 
-> **Học phần:** Xử lý ảnh số (Image Processing) — **Lớp:** 15DHKHDL03  
+> **Học phần:** Xử lý ảnh số (Image Processing) — **Lớp:** 15DHKHDL01  
 > **Đề tài:** Nghiên cứu và so sánh hiệu năng các kỹ thuật xử lý ảnh truyền thống (**Histogram Equalization**, **CLAHE**, **Gamma Correction**, **Multi-Scale Retinex**) trong bài toán phục hồi và tăng cường chất lượng ảnh phong cảnh ngoại cảnh chụp trong điều kiện ánh sáng yếu.  
 > **Kiến trúc:** 3-Tier Layered Architecture (Data Layer – Business/Model Layer – Presentation Layer) kết hợp Trực quan hóa XAI (Explainable AI).
 
