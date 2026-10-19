@@ -62,7 +62,7 @@ Dự án được nhóm nghiên cứu và triển khai toàn diện qua 5 nhóm 
 * **Mô phỏng suy thoái vật lý môi trường đêm:** Xây dựng module suy thoái giả lập môi trường thiếu sáng phức tạp gồm: suy giảm độ chói tuyến tính ($\text{factor} = 0.35$), nén dải động gamma vùng tối ($\gamma_{\text{dark}} = 2.2$) và mô phỏng 3 dạng nhiễu cảm biến phần cứng (Gaussian Noise $\sigma = 15$, Salt & Pepper Noise $p = 0.02$, Speckle Noise).
 
 #### 2. Kỹ thuật tiền xử lý & Phân lập kênh độ sáng (Luminance Isolation)
-* **Giải quyết triệt để lỗi méo màu:** Xây dựng cơ chế *Luminance Isolation Wrapper* tách biệt kênh độ sáng ($V$ trong HSV hoặc $L^*$ trong CIELAB) trước khi nâng cao độ tương phản, sau đó tái hợp nhất với các kênh sắc tố ($H, S$ hoặc $a^*, b^*$). Cơ chế này triệt tiêu hoàn toàn 100% hiện tượng sai lệch hệ số màu/bệt màu thường gặp khi can thiệp trực tiếp trên không gian RGB.
+* **Giải quyết triệt để lỗi méo màu:** Xây dựng cơ chế *Luminance Isolation Wrapper* tách biệt kênh độ sáng (**V** trong HSV hoặc $L^*$ trong CIELAB) trước khi nâng cao độ tương phản, sau đó tái hợp nhất với các kênh sắc tố (**H**, **S** hoặc $a^*, b^*$). Cơ chế này triệt tiêu hoàn toàn 100% hiện tượng sai lệch hệ số màu/bệt màu thường gặp khi can thiệp trực tiếp trên không gian RGB.
 * **Xử lý mâu thuẫn "Tăng sáng - Khuếch đại nhiễu":** Tích hợp tầng tiền xử lý khử nhiễu bảo tồn đường biên sắc nét (Bilateral Filter, Fast Non-Local Means, Median Filter) xử lý trước khi kích sáng, ngăn chặn việc làm vỡ cấu trúc hạt ảnh ở vùng tối sâu.
 
 #### 3. Cài đặt & Tối ưu hóa mã nguồn 4 thuật toán nâng cao chất lượng
