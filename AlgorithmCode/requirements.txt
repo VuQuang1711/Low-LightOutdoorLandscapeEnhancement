@@ -1,0 +1,19 @@
+# ==============================================================================
+# CÁC THƯ VIỆN CẦN THIẾT CHO THUẬT TOÁN XỬ LÝ ẢNH (ALGORITHM CODE)
+# Đồ án Xử Lý Ảnh Số: Nâng cao chất lượng ảnh phong cảnh thiếu sáng
+# ==============================================================================
+
+# Xử lý ảnh cơ bản, chuyển đổi không gian màu HSV, cân bằng histogram, lọc nhiễu Bilateral
+opencv-python>=4.8.0
+
+# Tính toán ma trận, xử lý mảng số học, giả lập nhiễu, LUT
+numpy>=1.24.0
+
+# Đo lường cấu trúc thị giác học thuật SSIM (Structural Similarity)
+scikit-image>=0.20.0
+
+# Xử lý tín hiệu và lọc không gian
+scipy>=1.10.0
+
+# Vẽ đồ thị, xuất ảnh trực quan so sánh 6 ô (matplotlib)
+matplotlib>=3.7.0

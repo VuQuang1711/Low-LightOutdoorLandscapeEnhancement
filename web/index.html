@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ứng Dụng So Sánh Nghiên cứu kỹ thuật xử lý ảnh | Academic XAI Suite</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Chart.js for High-DPI Interactive Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <!-- KaTeX for Crisp LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+
+  <link rel="stylesheet" href="style.css?v=3.0">
+</head>
+
+<body class="theme-dark">
+  <!-- Glowing Background Mesh -->
+  <div class="bg-mesh">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+  </div>
+
+  <div class="app-layout">
+    <!-- ==================== HEADER / TOP NAVIGATION ==================== -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-atom fa-spin-pulse" style="--fa-animation-duration: 10s;"></i>
+        </div>
+        <div class="brand-text">
+          <div class="title-row">
+            <h1>Ứng Dụng So Sánh Nghiên cứu kỹ thuật xử lý ảnh</h1>
+            <span class="badge-version">XAI 3-Tier v1.0</span>
+          </div>
+          <p class="subtitle">Nâng cao chất lượng ảnh phong cảnh ngoại cảnh thiếu sáng (HE, CLAHE, Gamma, MSR)</p>
+        </div>
+      </div>
+
+      <!-- Quick Academic Presets -->
+      <div class="nav-presets">
+        <span class="preset-label"><i class="fa-solid fa-sliders"></i> Presets:</span>
+        <button class="preset-btn active" data-preset="night_landscape" title="Phong cảnh ban đêm / Thiếu sáng nặng">
+          <i class="fa-solid fa-moon"></i> Cảnh Đêm
+        </button>
+        <button class="preset-btn" data-preset="sunset" title="Hoàng hôn / Ngược sáng vùng núi">
+          <i class="fa-solid fa-sun"></i> Hoàng Hôn
+        </button>
+        <button class="preset-btn" data-preset="foggy" title="Sương mù / Bụi khí quyển">
+          <i class="fa-solid fa-smog"></i> Sương Mù
+        </button>
+        <button class="preset-btn" data-preset="extreme_dark" title="Thiếu sáng cực độ (ISO cao)">
+          <i class="fa-solid fa-bolt"></i> Cực Tối
+        </button>
+      </div>
+
+      <!-- Actions & NÚT CHẤM HỎI GIẢI THÍCH KẾT QUẢ -->
+      <div class="nav-actions">
+        <!-- NÚT CHẤM HỎI ĐẶC BIỆT CỦA USER -->
+        <button class="btn-help-pulse" id="btnOpenHelp"
+          title="Bấm vào để mở Cẩm nang phản biện toàn cảnh (Live XAI) & Bảng độ phức tạp">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>Giải Thích Kết Quả (?)</span>
+        </button>
+
+        <button class="btn-icon" id="btnThemeToggle" title="Chuyển đổi giao diện Sáng / Tối">
+          <i class="fa-solid fa-sun"></i>
+        </button>
+        <div class="status-pill ready" id="systemStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Hệ thống sẵn sàng</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==================== MAIN CONTAINER ==================== -->
+    <div class="main-container">
+      <!-- SIDEBAR CONTROLS (TẦNG ĐIỀU KHIỂN THAM SỐ) -->
+      <aside class="sidebar-panel">
+        <div class="sidebar-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-sliders"></i>
+            <span>Bảng Điều Khiển Thực Nghiệm</span>
+          </div>
+          <button class="btn-text-sm" id="btnResetParams" title="Khôi phục mặc định">
+            <i class="fa-solid fa-rotate-left"></i> Mặc định
+          </button>
+        </div>
+
+        <div class="sidebar-scroll">
+          <!-- KHỐI 1: NGUỒN DỮ LIỆU ẢNH -->
+          <div class="control-card">
+            <div class="card-title">
+              <i class="fa-solid fa-image"></i>
+              <span>1. Nguồn Dữ Liệu Ảnh</span>
+            </div>
+
+            <div class="input-tabs">
+              <button class="tab-btn active" id="tabDataset">Tập Ảnh Dataset</button>
+              <button class="tab-btn" id="tabUpload">Upload Ảnh Thực Tế</button>
+            </div>
+
+            <!-- Tab Dataset -->
+            <div class="tab-pane active" id="paneDataset">
+              <div class="form-group">
+                <div class="label-row">
+                  <label for="imgIndexSlider">Chỉ số mẫu ảnh (Dataset Index):</label>
+                  <span class="val-badge" id="imgIndexVal">0 / 0</span>
+                </div>
+                <div class="slider-with-btns">
+                  <button class="nav-step-btn" id="btnPrevImg"><i class="fa-solid fa-chevron-left"></i></button>
+                  <input type="range" id="imgIndexSlider" min="0" max="100" value="0" class="custom-slider">
+                  <button class="nav-step-btn" id="btnNextImg"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button class="btn-secondary-sm" id="btnRandomImg">
+                  <i class="fa-solid fa-shuffle"></i> Ngẫu Nhiên
+                </button>
+                <span class="file-name-label" id="currentFileName">00000.jpg</span>
+              </div>
+            </div>
+
+            <!-- Tab Upload -->
+            <div class="tab-pane" id="paneUpload">
+              <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileUploadInput" accept="image/*" class="file-input-hidden">
+                <div class="drop-zone-content">
+                  <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                  <p class="drop-text">Kéo thả ảnh hoặc <span class="highlight">Chọn Tệp</span></p>
+                  <span class="drop-hint">PNG, JPG, BMP, WEBP (Ảnh phong cảnh thực tế)</span>
+                </div>
+              </div>
+              <div class="upload-preview-row" id="uploadPreviewRow" style="display: none;">
+                <span class="upload-name" id="uploadFileName">real_photo.jpg</span>
+                <button class="btn-remove-upload" id="btnRemoveUpload"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- KHỐI 2: MÔ PHỎNG THIẾU SÁNG & NHIỄU NHÂN TẠO -->
+          <div class="control-card">
+            <div class="card-title">
+              <i class="fa-solid fa-cloud-moon"></i>
+              <span>2. Mô Phỏng Thiếu Sáng & Nhiễu</span>
+              <button type="button" class="btn-help-inline q-mark-btn" data-defense-key="sim_lowlight"
+                data-param="card_sim" title="Giải thích nguyên lý mô phỏng thiếu sáng">(?)</button>
+            </div>
+
+            <div class="form-group">
+              <label class="checkbox-row">
+                <input type="checkbox" id="chkSimulateLowLight" checked>
+                <span>Kích hoạt mô phỏng môi trường thiếu sáng</span>
+              </label>
+            </div>
+
+            <div class="sub-settings" id="lowLightSettings">
+              <div class="form-group">
+                <div class="label-row">
+                  <label for="brightnessFactorSlider">
+                    Hệ số độ chói (Brightness Factor):
+                    <button type="button" class="btn-help-param q-mark-btn" data-defense-key="brightness"
+                      data-param="brightness" title="Xem giải thích con số này">(?)</button>
+                  </label>
+                  <span class="val-badge" id="brightnessFactorVal">0.35</span>
+                </div>
+                <input type="range" id="brightnessFactorSlider" min="0.10" max="0.80" value="0.35" step="0.05"
+                  class="custom-slider">
+              </div>
+
+              <div class="form-group">
+                <div class="label-row">
+                  <label for="gammaDarkSlider">
+                    Gamma làm tối phi tuyến (Gamma Dark):
+                    <button type="button" class="btn-help-param q-mark-btn" data-defense-key="gamma_dark"
+                      data-param="gamma_dark" title="Xem giải thích con số này">(?)</button>
+                  </label>
+                  <span class="val-badge" id="gammaDarkVal">2.2</span>
+                </div>
+                <input type="range" id="gammaDarkSlider" min="1.0" max="3.5" value="2.2" step="0.1"
+                  class="custom-slider">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="noiseTypeSelect">
+                Loại nhiễu nhân tạo kiểm thử:
+                <button type="button" class="btn-help-param q-mark-btn" data-defense-key="noise_type"
+                  data-param="noise_type" title="Xem giải thích các loại nhiễu">(?)</button>
+              </label>
+              <select id="noiseTypeSelect" class="custom-select">
+                <option value="gaussian" selected>Nhiễu Gauss (Gaussian Noise)</option>
+                <option value="salt_and_pepper">Nhiễu Muối Tiêu (Salt & Pepper)</option>
+                <option value="poisson">Nhiễu Lượng Tử (Poisson/Shot Noise)</option>
+                <option value="speckle">Nhiễu Đốm Nhân (Speckle Noise)</option>
+                <option value="none">Không thêm nhiễu (Clean Low-Light)</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="noiseParamGroup">
+              <div class="label-row">
+                <label for="noiseSigmaSlider">
+                  Cường độ nhiễu (&sigma;):
+                  <button type="button" class="btn-help-param q-mark-btn" data-defense-key="noise_sigma"
+                    data-param="noise_sigma" title="Xem giải thích con số này">(?)</button>
+                </label>
+                <span class="val-badge" id="noiseSigmaVal">15.0</span>
+              </div>
+              <input type="range" id="noiseSigmaSlider" min="5.0" max="40.0" value="15.0" step="1.0"
+                class="custom-slider">
+            </div>
+          </div>
+
+          <!-- KHỐI 3: TIỀN XỬ LÝ KHỬ NHIỄU BẢO TỒN BIÊN -->
+          <div class="control-card">
+            <div class="card-title">
+              <i class="fa-solid fa-filter"></i>
+              <span>3. Khử Nhiễu Tiền Xử Lý</span>
+              <button type="button" class="btn-help-inline q-mark-btn" data-defense-key="card_denoise"
+                data-param="card_denoise" title="Giải thích tiền xử lý khử nhiễu">(?)</button>
+            </div>
+
+            <div class="form-group">
+              <label for="denoiseMethodSelect">
+                Bộ lọc bảo tồn đường biên:
+                <button type="button" class="btn-help-param q-mark-btn" data-defense-key="bilateral_hsv"
+                  data-param="denoise_method" title="Xem giải thích bộ lọc bảo tồn đường biên">(?)</button>
+              </label>
+              <select id="denoiseMethodSelect" class="custom-select">
+                <option value="bilateral" selected>Bilateral Filter (Bảo tồn cạnh sắc nét - Khuyên dùng)</option>
+                <option value="nlm">Non-Local Means (Mịn nền cao cấp)</option>
+                <option value="median">Median Filter (Lọc trung vị - Chống muối tiêu)</option>
+                <option value="none">Không lọc khử nhiễu</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="colorSpaceSelect">
+                Không gian màu xử lý độ sáng:
+                <button type="button" class="btn-help-param q-mark-btn" data-defense-key="color_space"
+                  data-param="color_space" title="Xem giải thích vì sao dùng HSV/CIELAB">(?)</button>
+              </label>
+              <select id="colorSpaceSelect" class="custom-select">
+                <option value="HSV" selected>HSV (Chỉ xử lý kênh V - Giữ nguyên H, S)</option>
+                <option value="LAB">CIELAB (Chỉ xử lý kênh L* - Giữ nguyên a*, b*)</option>
+              </select>
+              <span class="hint-text"><i class="fa-solid fa-circle-info"></i> Giúp bảo tồn màu sắc tự nhiên, triệt tiêu
+                hiện tượng lệch/bệt màu.</span>
+            </div>
+          </div>
+
+          <!-- KHỐI 4: THAM SỐ 4 THUẬT TOÁN -->
+          <div class="control-card">
+            <div class="card-title">
+              <i class="fa-solid fa-microchip"></i>
+              <span>4. Tinh Chỉnh Thuật Toán</span>
+              <button type="button" class="btn-help-inline q-mark-btn" data-defense-key="card_tuning"
+                data-param="card_tuning" title="Giải thích tinh chỉnh thuật toán">(?)</button>
+            </div>
+
+            <!-- CLAHE Params -->
+            <div class="form-group">
+              <div class="label-row">
+                <label for="claheClipSlider">
+                  CLAHE Clip Limit (&beta;):
+                  <button type="button" class="btn-help-param q-mark-btn" data-defense-key="clahe_params"
+                    data-param="clahe_clip" title="Xem giải thích CLAHE Clip Limit (β)">(?)</button>
+                </label>
+                <span class="val-badge" id="claheClipVal">3.0</span>
+              </div>
+              <input type="range" id="claheClipSlider" min="1.0" max="8.0" value="3.0" step="0.5" class="custom-slider">
+            </div>
+
+            <div class="form-group">
+              <label>
+                Kích thước lưới CLAHE Tile Grid:
+                <button type="button" class="btn-help-param q-mark-btn" data-defense-key="clahe_grid"
+                  data-param="clahe_grid" title="Xem giải thích kích thước lưới CLAHE Tile Grid">(?)</button>
+              </label>
+              <div class="grid-pill-row">
+                <button class="grid-pill" data-grid="4x4">4 &times; 4</button>
+                <button class="grid-pill active" data-grid="8x8">8 &times; 8</button>
+                <button class="grid-pill" data-grid="16x16">16 &times; 16</button>
+              </div>
+            </div>
+
+            <!-- Gamma Params -->
+            <div class="form-group">
+              <div class="label-row">
+                <label for="gammaValSlider">
+                  Hệ số Gamma Correction (&gamma;):
+                  <button type="button" class="btn-help-param q-mark-btn" data-defense-key="gamma_val"
+                    data-param="gamma_val" title="Xem giải thích hệ số Gamma Correction (γ)">(?)</button>
+                </label>
+                <span class="val-badge" id="gammaValVal">0.50</span>
+              </div>
+              <input type="range" id="gammaValSlider" min="0.20" max="1.50" value="0.50" step="0.05"
+                class="custom-slider">
+              <span class="hint-text">&gamma; &lt; 1.0 giúp kéo sáng mạnh vùng tối; &gamma; &gt; 1.0 làm tối ảnh.</span>
+            </div>
+          </div>
+
+          <!-- NÚT CHẠY PIPELINE CHÍNH -->
+          <button class="btn-primary-action" id="btnExecute">
+            <span class="btn-icon-wrap"><i class="fa-solid fa-bolt-lightning"></i></span>
+            <span class="btn-text">Thực Thi So Sánh 4 Thuật Toán</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT PANEL (BẢNG TRỰC QUAN HÓA 6 Ô CHUẨN XAI) -->
+      <main class="content-panel">
+        <!-- KPI RIBBON: TỔNG QUAN ĐỊNH LƯỢNG KÈM NÚT (?) -->
+        <section class="kpi-ribbon">
+          <!-- PSNR CARD -->
+          <div class="kpi-card" id="kpiCardPsnr">
+            <div class="kpi-icon-wrap psnr"><i class="fa-solid fa-signal"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-header">
+                <span class="kpi-title">PSNR (Peak Signal-to-Noise Ratio)</span>
+                <button class="btn-help-inline q-mark-btn" data-defense-key="psnr_kpi" data-help="psnr"
+                  title="Xem giải thích cách tính & bản chất PSNR">(?)</button>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-main-val" id="valBestPsnr">--</span>
+                <span class="kpi-unit">dB</span>
+                <span class="kpi-best-tag" id="tagBestPsnr">Tốt nhất: --</span>
+              </div>
+              <div class="kpi-footer">
+                <span class="kpi-sub" id="subPsnr">Ảnh Suy Thoái(Sau tạo nhiễu): <b>-- dB</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SSIM CARD -->
+          <div class="kpi-card" id="kpiCardSsim">
+            <div class="kpi-icon-wrap ssim"><i class="fa-solid fa-shapes"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-header">
+                <span class="kpi-title">SSIM (Độ Tương Đồng Cấu Trúc)</span>
+                <button class="btn-help-inline q-mark-btn" data-defense-key="ssim_kpi" data-help="ssim"
+                  title="Xem giải thích cách tính & bản chất SSIM">(?)</button>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-main-val" id="valBestSsim">--</span>
+                <span class="kpi-unit">/ 1.0</span>
+                <span class="kpi-best-tag" id="tagBestSsim">Tốt nhất: --</span>
+              </div>
+              <div class="kpi-footer">
+                <span class="kpi-sub" id="subSsim">Ảnh suy thoái(Sau Tạo Nhiễu): <b>--</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- NIQE CARD -->
+          <div class="kpi-card" id="kpiCardNiqe">
+            <div class="kpi-icon-wrap niqe"><i class="fa-solid fa-leaf"></i></div>
+            <div class="kpi-info">
+              <div class="kpi-header">
+                <span class="kpi-title">NIQE (Độ Tự Nhiên Không Tham Chiếu)</span>
+                <button class="btn-help-inline q-mark-btn" data-defense-key="niqe_kpi" data-help="niqe"
+                  title="Xem giải thích cách tính & bản chất NIQE">(?)</button>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-main-val" id="valBestNiqe">--</span>
+                <span class="kpi-unit">(Càng nhỏ càng tốt)</span>
+                <span class="kpi-best-tag" id="tagBestNiqe">Tốt nhất: --</span>
+              </div>
+              <div class="kpi-footer">
+                <span class="kpi-sub" id="subNiqe">Ảnh Suy Thoái(Sau Tạo nhiễu): <b>--</b></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- THÔNG BÁO PROTOCOL NẾU UPLOAD ẢNH THỰC TẾ -->
+        <div class="banner-protocol" id="bannerProtocol" style="display: none;">
+          <i class="fa-solid fa-info-circle"></i>
+          <div class="banner-text">
+            <strong>Chế độ Ảnh Thực Tế (Real-World Upload):</strong> Do không có ảnh gốc (Ground Truth) để đối chiếu, hệ
+            thống tự động ẩn điểm số PSNR/SSIM và tập trung đánh giá chất lượng tự nhiên thông qua chỉ số học thuật
+            <strong>NIQE</strong>.
+          </div>
+        </div>
+
+        <!-- ================= Ô 1 & Ô 2: ĐỐI CHIẾU HÌNH ẢNH ================= -->
+        <section class="section-container">
+          <div class="section-header">
+            <div class="section-title">
+              <i class="fa-solid fa-layer-group"></i>
+              <span>Ô 1 & Ô 2: Đối Chiếu Trực Quan Ảnh Đầu Vào & Kết Quả 4 Phương Pháp</span>
+            </div>
+            <div class="view-mode-pills">
+              <button class="view-pill active" data-view="grid4"><i class="fa-solid fa-grip"></i> Lưới 4 Phương
+                Pháp</button>
+              <button class="view-pill" data-view="split"><i class="fa-solid fa-arrows-left-right"></i> Kéo Trượt So
+                Sánh (Split Slider)</button>
+              <button class="view-pill" data-view="heatmaps"><i class="fa-solid fa-fire"></i> Bản Đồ Nhiệt Khác
+                Biệt</button>
+            </div>
+          </div>
+
+          <!-- VIEW 1: LƯỚI 4 ẢNH PHƯƠNG PHÁP CÙNG 2 ẢNH ĐẦU VÀO -->
+          <div class="view-pane active" id="viewPaneGrid4">
+            <!-- Hàng Ảnh Đầu Vào: Gốc & Suy Thoái -->
+            <div class="input-images-row">
+              <div class="img-display-card">
+                <div class="card-tag">Ảnh Gốc (Ground Truth)</div>
+                <div class="img-wrapper">
+                  <img id="imgClean" src="" alt="Ảnh Gốc">
+                </div>
+              </div>
+              <div class="img-display-card">
+                <div class="card-tag alert">Ảnh Thiếu Sáng & Nhiễu (Đầu Vào)</div>
+                <div class="img-wrapper">
+                  <img id="imgDegraded" src="" alt="Ảnh Thiếu Sáng">
+                </div>
+              </div>
+              <div class="img-display-card">
+                <div class="card-tag info">Sau Lọc Khử Nhiễu (Pre-denoised)</div>
+                <div class="img-wrapper">
+                  <img id="imgDenoisedInput" src="" alt="Sau Tiền Xử Lý">
+                </div>
+              </div>
+            </div>
+
+            <!-- Hàng 4 Thuật Toán -->
+            <div class="methods-grid-4">
+              <!-- Method 1: HE -->
+              <div class="method-card" id="cardMethodHe">
+                <div class="method-card-header">
+                  <span class="method-badge">Thuật Toán 1</span>
+                  <h4>Histogram Equalization (HE)</h4>
+                  <button class="btn-help-inline q-mark-btn" data-defense-key="he" data-help="he"
+                    title="Luận điểm phản biện thuật toán HE">(?)</button>
+                </div>
+                <div class="img-wrapper">
+                  <img id="imgResHe" src="" alt="Kết quả HE">
+                </div>
+                <div class="method-card-footer">
+                  <div class="metrics-mini-row">
+                    <span>PSNR: <b id="miniPsnrHe">--</b> dB</span>
+                    <span>SSIM: <b id="miniSsimHe">--</b></span>
+                    <span>NIQE: <b id="miniNiqeHe">--</b></span>
+                  </div>
+                  <span class="time-tag"><i class="fa-regular fa-clock"></i> <span id="timeHe">--</span> ms</span>
+                </div>
+              </div>
+
+              <!-- Method 2: CLAHE -->
+              <div class="method-card highlight" id="cardMethodClahe">
+                <div class="method-card-header">
+                  <span class="method-badge star"><i class="fa-solid fa-star"></i> Thuật Toán 2</span>
+                  <h4>CLAHE (Tương Phản Thích Nghi)</h4>
+                  <button class="btn-help-inline q-mark-btn" data-defense-key="clahe" data-help="clahe"
+                    title="Luận điểm phản biện thuật toán CLAHE">(?)</button>
+                </div>
+                <div class="img-wrapper">
+                  <img id="imgResClahe" src="" alt="Kết quả CLAHE">
+                </div>
+                <div class="method-card-footer">
+                  <div class="metrics-mini-row">
+                    <span>PSNR: <b id="miniPsnrClahe">--</b> dB</span>
+                    <span>SSIM: <b id="miniSsimClahe">--</b></span>
+                    <span>NIQE: <b id="miniNiqeClahe">--</b></span>
+                  </div>
+                  <span class="time-tag"><i class="fa-regular fa-clock"></i> <span id="timeClahe">--</span> ms</span>
+                </div>
+              </div>
+
+              <!-- Method 3: Gamma -->
+              <div class="method-card" id="cardMethodGamma">
+                <div class="method-card-header">
+                  <span class="method-badge">Thuật Toán 3</span>
+                  <h4>Gamma Correction</h4>
+                  <button class="btn-help-inline q-mark-btn" data-defense-key="gamma" data-help="gamma"
+                    title="Luận điểm phản biện thuật toán Gamma Correction">(?)</button>
+                </div>
+                <div class="img-wrapper">
+                  <img id="imgResGamma" src="" alt="Kết quả Gamma">
+                </div>
+                <div class="method-card-footer">
+                  <div class="metrics-mini-row">
+                    <span>PSNR: <b id="miniPsnrGamma">--</b> dB</span>
+                    <span>SSIM: <b id="miniSsimGamma">--</b></span>
+                    <span>NIQE: <b id="miniNiqeGamma">--</b></span>
+                  </div>
+                  <span class="time-tag"><i class="fa-regular fa-clock"></i> <span id="timeGamma">--</span> ms</span>
+                </div>
+              </div>
+
+              <!-- Method 4: MSR -->
+              <div class="method-card" id="cardMethodMsr">
+                <div class="method-card-header">
+                  <span class="method-badge">Thuật Toán 4</span>
+                  <h4>Multi-Scale Retinex (MSR)</h4>
+                  <button class="btn-help-inline q-mark-btn" data-defense-key="msr" data-help="msr"
+                    title="Luận điểm phản biện thuật toán Multi-Scale Retinex">(?)</button>
+                </div>
+                <div class="img-wrapper">
+                  <img id="imgResMsr" src="" alt="Kết quả MSR">
+                </div>
+                <div class="method-card-footer">
+                  <div class="metrics-mini-row">
+                    <span>PSNR: <b id="miniPsnrMsr">--</b> dB</span>
+                    <span>SSIM: <b id="miniSsimMsr">--</b></span>
+                    <span>NIQE: <b id="miniNiqeMsr">--</b></span>
+                  </div>
+                  <span class="time-tag"><i class="fa-regular fa-clock"></i> <span id="timeMsr">--</span> ms</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VIEW 2: SPLIT SLIDER SO SÁNH TƯƠNG TÁC -->
+          <div class="view-pane" id="viewPaneSplit">
+            <div class="split-controls-bar">
+              <span class="label">So Sánh Giữa:</span>
+              <select id="splitMethodSelect" class="custom-select-sm">
+                <option value="clahe" selected>CLAHE vs Ảnh Thiếu Sáng</option>
+                <option value="he">HE vs Ảnh Thiếu Sáng</option>
+                <option value="gamma">Gamma vs Ảnh Thiếu Sáng</option>
+                <option value="msr">MSR vs Ảnh Thiếu Sáng</option>
+              </select>
+            </div>
+            <div class="split-compare-wrapper" id="splitWrapper">
+              <div class="split-image-container">
+                <img id="splitImgAfter" class="split-img after-img" src="" alt="Kết Quả Nâng Cao">
+                <div class="split-label label-after" id="splitLabelAfter">CLAHE (Sau Xử Lý)</div>
+
+                <div class="split-overlay" id="splitOverlay">
+                  <img id="splitImgBefore" class="split-img before-img" src="" alt="Trước Xử Lý">
+                  <div class="split-label label-before">Ảnh Thiếu Sáng & Nhiễu</div>
+                </div>
+
+                <div class="split-divider" id="splitDivider">
+                  <div class="split-handle">
+                    <i class="fa-solid fa-arrows-left-right"></i>
+                    <span id="splitHandlePercent">50%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="split-hint">
+                <i class="fa-solid fa-hand-pointer"></i> Giữ chuột và kéo vạch phân cách sang hai bên để soi chi tiết
+                vùng sáng và vùng tối
+              </div>
+            </div>
+          </div>
+
+          <!-- VIEW 3: BẢN ĐỒ NHIỆT KHÁC BIỆT (HEATMAPS) -->
+          <div class="view-pane" id="viewPaneHeatmaps">
+            <!-- KHUNG HƯỚNG DẪN GIẢI TÍCH BẢN ĐỒ NHIỆT (EXPLAINABLE HEATMAP GUIDE) -->
+            <div class="heatmap-guide-panel">
+              <div class="heatmap-guide-header">
+                <div class="heatmap-guide-title">
+                  <i class="fa-solid fa-fire-flame-curved" style="color: #f59e0b;"></i>
+                  <span>Hướng Dẫn Giải Tích & Đọc Hiểu Biểu Đồ Nhiệt (Difference Heatmap)</span>
+                  <button type="button" class="btn-help-inline q-mark-btn" data-defense-key="difference_heatmap"
+                    title="Xem luận điểm phản biện khoa học về bản đồ nhiệt">(?)</button>
+                </div>
+                <div class="heatmap-guide-badges">
+                  <span class="xai-tag"><i class="fa-solid fa-eye"></i> Trực Quan XAI</span>
+                  <span class="xai-tag"><i class="fa-solid fa-palette"></i> Colormap JET</span>
+                  <span class="xai-tag"><i class="fa-solid fa-calculator"></i> $\Delta I = |I_{\text{out}} -
+                    I_{\text{in}}|$</span>
+                </div>
+              </div>
+
+              <!-- THANG ĐO NHIỆT JET GRADIENT BAR -->
+              <div class="heatmap-colorbar-container">
+                <div class="heatmap-colorbar-label">
+                  <span><i class="fa-solid fa-arrow-right-arrow-left"></i> <b>Thang đo mức độ lệch sáng (Mức xám 0
+                      &rarr; 255):</b></span>
+                  <span class="colorbar-legend-summary">Lạnh (Không đổi) &rarr; Ấm (Bù sáng nhẹ/vừa) &rarr; Nóng (Kéo
+                    sáng mạnh / Cực đại)</span>
+                </div>
+                <div class="heatmap-colorbar-track"></div>
+                <div class="heatmap-colorbar-ticks">
+                  <div class="tick-item">
+                    <span class="tick-val">0</span>
+                    <span class="tick-desc"><i class="fa-solid fa-circle color-blue"></i> Xanh Dương: Giữ nguyên / Không
+                      đổi</span>
+                  </div>
+                  <div class="tick-item">
+                    <span class="tick-val">64</span>
+                    <span class="tick-desc"><i class="fa-solid fa-circle color-cyan"></i> Xanh Lơ: Bù sáng nhẹ</span>
+                  </div>
+                  <div class="tick-item">
+                    <span class="tick-val">128</span>
+                    <span class="tick-desc"><i class="fa-solid fa-circle color-yellow"></i> Lục / Vàng: Phục hồi bóng
+                      râm vừa</span>
+                  </div>
+                  <div class="tick-item">
+                    <span class="tick-val">192</span>
+                    <span class="tick-desc"><i class="fa-solid fa-circle color-orange"></i> Cam: Kéo sáng mạnh</span>
+                  </div>
+                  <div class="tick-item">
+                    <span class="tick-val">255</span>
+                    <span class="tick-desc"><i class="fa-solid fa-circle color-red"></i> Đỏ Rực: Can thiệp cực đại /
+                      Cháy sáng</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DANH SÁCH GIẢI THÍCH XUẤT HIỆN BẰNG DẤU CHẤM (BULLET POINTS) -->
+              <div class="heatmap-bullet-columns">
+                <!-- Cột 1: Quy ước dải màu & Bản chất toán học -->
+                <div class="heatmap-bullet-col">
+                  <div class="col-title"><i class="fa-solid fa-circle-dot"></i> Bản Chất Toán Học & Quy Ước Thang Màu
+                  </div>
+                  <ul class="heatmap-bullet-list">
+                    <li>
+                      <span class="bullet-dot dot-math"></span>
+                      <div><b>Bản chất sai phân năng lượng:</b> Biểu đồ nhiệt tính độ lệch tuyệt đối $\Delta I(x, y) =
+                        |I_{\text{out}}(x, y) - I_{\text{in}}(x, y)|$ tại từng pixel, sau đó ánh xạ qua bảng màu phổ
+                        quang học <code>cv2.COLORMAP_JET</code> để người nghiên cứu phát hiện các biến đổi năng lượng
+                        cực nhỏ ($2 - 3$ mức xám) mà mắt thường không thể thấy trên ảnh xám đen trắng.</div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-blue"></span>
+                      <div><b>Vùng Màu Xanh Dương ($\Delta I \approx 0 - 30$):</b> Pixel hầu như không bị biến đổi độ
+                        sáng. Thuật toán giữ nguyên vùng này — điển hình là vùng nền trời đêm hoặc các đốm đèn đã chuẩn
+                        mực, không bị can thiệp bừa bãi.</div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-cyan-yellow"></span>
+                      <div><b>Vùng Màu Xanh Lơ & Vàng ($\Delta I \approx 30 - 100$):</b> Pixel được bù sáng mức độ vừa
+                        phải, phục hồi tự nhiên các chi tiết trung gian và sắc thái cây cỏ mà không làm vỡ hạt nhiễu.
+                      </div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-red"></span>
+                      <div><b>Vùng Màu Đỏ Rực ($\Delta I > 120$):</b> Pixel được thuật toán can thiệp bơm năng lượng và
+                        kéo sáng tối đa để cứu các hốc bóng tối sâu; tuy nhiên nếu sắc đỏ phủ kín toàn ảnh sẽ là cảnh
+                        báo nguy cơ cháy sáng (over-enhancement).</div>
+                    </li>
+                  </ul>
+                </div>
+
+                <!-- Cột 2: Cách giải tích & đối chiếu 4 thuật toán -->
+                <div class="heatmap-bullet-col">
+                  <div class="col-title"><i class="fa-solid fa-circle-dot"></i> Cách Giải Tích & Đối Chiếu 4 Thuật Toán
+                  </div>
+                  <ul class="heatmap-bullet-list">
+                    <li>
+                      <span class="bullet-dot dot-he"></span>
+                      <div><b>Giải tích HE (Histogram Equalization):</b> Sắc đỏ rực và cam loang lổ phủ kín gần như 100%
+                        diện tích &rarr; <i>HE can thiệp thô bạo và đồng loạt toàn khung hình; nó kéo sáng cả nền trời
+                          đêm, gây cháy sáng gắt gỏng và làm bệt các mảng màu.</i></div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-clahe"></span>
+                      <div><b>Giải tích CLAHE:</b> Đốm đỏ và vàng chỉ khu trú thông minh vào các bóng râm, tán cây và
+                        góc tối, trong khi nền trời vẫn giữ màu xanh mát &rarr; <i>Minh chứng cơ chế thích nghi cục bộ
+                          (Adaptive Grid) và cắt đỉnh (Clip Limit) hoạt động hoàn hảo: chỉ bù sáng nơi thực sự thiếu và
+                          bảo vệ vùng sáng.</i></div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-gamma"></span>
+                      <div><b>Giải tích Gamma Correction ($\gamma < 1$):</b> Màu sắc lan tỏa đều, chuyển tiếp mượt mà
+                            theo hàm lũy thừa phi tuyến &rarr; <i>Nâng sáng êm dịu toàn diện, tốc độ $O(1)$ cực nhanh
+                              nhưng không có tính chọn lọc thích ứng riêng biệt theo từng vùng bóng tối sâu.</i></div>
+                    </li>
+                    <li>
+                      <span class="bullet-dot dot-msr"></span>
+                      <div><b>Giải tích Retinex (MSR):</b> Xuất hiện các viền vàng và đỏ phát sáng sắc nét men theo từng
+                        đường viền kiến trúc, cành cây và gân lá &rarr; <i>Minh chứng Retinex phân tách chính xác trường
+                          phản xạ $R$, tập trung năng lượng làm sắc nét cấu trúc vi mô và cạnh biên vượt trội.</i></div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Lời khuyên đánh giá nhanh XAI (Quick Takeaway) xuất hiện bằng dấu chấm -->
+              <div class="heatmap-takeaway-box">
+                <div class="takeaway-badge"><i class="fa-solid fa-lightbulb"></i> Quy Tắc Đánh Giá Nhanh (XAI Takeaway):
+                </div>
+                <div class="takeaway-bullets">
+                  <div class="takeaway-item"><i class="fa-solid fa-circle-check color-green"></i> <span><b>Thuật toán
+                        tốt:</b> Bản đồ nhiệt phân hóa rõ rệt — Giữ xanh ở vùng đã sáng (trời đêm) và chỉ đỏ/vàng ở vùng
+                      bóng tối cần cứu chi tiết (như CLAHE).</span></div>
+                  <div class="takeaway-item"><i class="fa-solid fa-triangle-exclamation color-orange"></i>
+                    <span><b>Thuật toán can thiệp quá đà:</b> Bản đồ nhiệt đỏ rực tràn lan khắp ảnh không phân biệt vùng
+                      (như HE) &rarr; Nguy cơ cháy sáng và bệt màu rất cao.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- LƯỚI 4 CARD BẢN ĐỒ NHIỆT KÈM DẤU CHẤM GIẢI TÍCH TRỰC TIẾP DƯỚI MỖI ẢNH -->
+            <div class="heatmaps-grid">
+              <!-- Card HE -->
+              <div class="heatmap-card" data-method="he">
+                <div class="heatmap-card-header">
+                  <span class="heatmap-method-badge he">Thuật Toán 1</span>
+                  <h5>Bản Đồ Lệch Sáng: HE</h5>
+                </div>
+                <div class="heatmap-img-wrap">
+                  <img id="imgDiffHe" src="" alt="Heatmap HE">
+                  <span class="zoom-hover-badge"><i class="fa-solid fa-magnifying-glass-plus"></i> Phóng to</span>
+                </div>
+                <div class="heatmap-card-bullet-note alert">
+                  <i class="fa-solid fa-circle"></i>
+                  <span><b>Giải tích HE:</b> Đỏ rực phủ kín diện rộng &rarr; Can thiệp toàn cục thô bạo, kéo sáng cả nền
+                    trời, nguy cơ cháy sáng cao.</span>
+                </div>
+              </div>
+
+              <!-- Card CLAHE -->
+              <div class="heatmap-card" data-method="clahe">
+                <div class="heatmap-card-header">
+                  <span class="heatmap-method-badge clahe">Thuật Toán 2</span>
+                  <h5>Bản Đồ Lệch Sáng: CLAHE</h5>
+                </div>
+                <div class="heatmap-img-wrap">
+                  <img id="imgDiffClahe" src="" alt="Heatmap CLAHE">
+                  <span class="zoom-hover-badge"><i class="fa-solid fa-magnifying-glass-plus"></i> Phóng to</span>
+                </div>
+                <div class="heatmap-card-bullet-note success">
+                  <i class="fa-solid fa-circle"></i>
+                  <span><b>Giải tích CLAHE:</b> Đỏ/vàng khu trú vào bóng tối, trời vẫn xanh &rarr; Thích nghi cục bộ
+                    thông minh, chống cháy sáng.</span>
+                </div>
+              </div>
+
+              <!-- Card Gamma -->
+              <div class="heatmap-card" data-method="gamma">
+                <div class="heatmap-card-header">
+                  <span class="heatmap-method-badge gamma">Thuật Toán 3</span>
+                  <h5>Bản Đồ Lệch Sáng: Gamma</h5>
+                </div>
+                <div class="heatmap-img-wrap">
+                  <img id="imgDiffGamma" src="" alt="Heatmap Gamma">
+                  <span class="zoom-hover-badge"><i class="fa-solid fa-magnifying-glass-plus"></i> Phóng to</span>
+                </div>
+                <div class="heatmap-card-bullet-note info">
+                  <i class="fa-solid fa-circle"></i>
+                  <span><b>Giải tích Gamma:</b> Màu chuyển tiếp mượt đều &rarr; Kéo sáng phi tuyến êm ái toàn ảnh nhưng
+                    không phân vùng chi tiết.</span>
+                </div>
+              </div>
+
+              <!-- Card MSR -->
+              <div class="heatmap-card" data-method="msr">
+                <div class="heatmap-card-header">
+                  <span class="heatmap-method-badge msr">Thuật Toán 4</span>
+                  <h5>Bản Đồ Lệch Sáng: MSR</h5>
+                </div>
+                <div class="heatmap-img-wrap">
+                  <img id="imgDiffMsr" src="" alt="Heatmap MSR">
+                  <span class="zoom-hover-badge"><i class="fa-solid fa-magnifying-glass-plus"></i> Phóng to</span>
+                </div>
+                <div class="heatmap-card-bullet-note warning">
+                  <i class="fa-solid fa-circle"></i>
+                  <span><b>Giải tích MSR:</b> Phát sáng men theo đường biên &rarr; Tách trường phản xạ Retinex, làm sắc
+                    nét vi mô cấu trúc.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Ô 3: TRỰC QUAN ĐẶC TRƯNG HISTOGRAM ================= -->
+        <section class="section-container">
+          <div class="section-header">
+            <div class="section-title">
+              <i class="fa-solid fa-chart-column"></i>
+              <span>Ô 3: Trực Quan Đặc Trưng - Phân Phối Cường Độ Sáng (Histogram) Trước & Sau</span>
+            </div>
+            <button class="btn-help-inline q-mark-btn" data-defense-key="histogram_comb" data-help="histogram"
+              title="Giải mã hiện tượng răng cưa trên Histogram">(?)</button>
+          </div>
+          <div class="chart-container-card">
+            <div class="chart-controls-row">
+              <span class="chart-desc">Biểu đồ đối chiếu 256 mức xám chứng minh khả năng tái phân bổ ánh sáng và phục
+                hồi dải tương phản:</span>
+              <div class="chart-legend-custom">
+                <span class="legend-item"><span class="legend-box input"></span> Ảnh Thiếu Sáng</span>
+                <span class="legend-item"><span class="legend-box he"></span> HE</span>
+                <span class="legend-item"><span class="legend-box clahe"></span> CLAHE</span>
+                <span class="legend-item"><span class="legend-box gamma"></span> Gamma</span>
+                <span class="legend-item"><span class="legend-box msr"></span> MSR</span>
+              </div>
+            </div>
+            <div class="chart-canvas-wrapper">
+              <canvas id="histChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Ô 4: TÍNH HỌC THUẬT & CÔNG THỨC TOÁN ================= -->
+        <section class="section-container">
+          <div class="section-header">
+            <div class="section-title">
+              <i class="fa-solid fa-square-root-variable"></i>
+              <span>Ô 4: Tính Học Thuật - Công Thức Toán Học LaTeX & Nguyên Lý Cốt Lõi</span>
+            </div>
+            <div class="formula-tabs">
+              <button class="formula-tab active" data-formula="he">HE</button>
+              <button class="formula-tab" data-formula="clahe">CLAHE</button>
+              <button class="formula-tab" data-formula="gamma">Gamma</button>
+              <button class="formula-tab" data-formula="msr">MSR</button>
+            </div>
+          </div>
+
+          <div class="formula-display-card">
+            <div class="formula-header">
+              <h4 id="formulaMethodTitle">Thuật Toán 2: CLAHE (Contrast Limited Adaptive Histogram Equalization)</h4>
+              <button class="btn-help-inline q-mark-btn" id="btnFormulaHelp" data-defense-key="formula_latex"
+                title="Giải thích công thức toán học Ô 4">(?)</button>
+            </div>
+            <div class="math-box-latex" id="mathLatexBox">
+              <!-- Rendered via KaTeX -->
+            </div>
+            <div class="formula-explanation" id="formulaExplanation">
+              <!-- Explanation text -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Ô 5 & Ô 6: ĐO LƯỜNG ĐỊNH LƯỢNG & BẢNG SO SÁNH ================= -->
+        <section class="section-container">
+          <div class="section-header">
+            <div class="section-title">
+              <i class="fa-solid fa-table-list"></i>
+              <span>Ô 5 & Ô 6: Đo Lường Định Lượng, Bảng So Sánh Hiệu Năng & Khuyến Nghị Tối Ưu</span>
+            </div>
+            <button class="btn-help-inline q-mark-btn" data-defense-key="metrics_paradox" data-help="table"
+              title="Nghịch lý điểm số: Tại sao chọn MSR/CLAHE thay vì HE?">(?)</button>
+          </div>
+
+          <div class="comparison-dual-row">
+            <!-- BẢNG SO SÁNH 4 PHƯƠNG PHÁP -->
+            <div class="table-card">
+              <table class="academic-table" id="tableComparison">
+                <thead>
+                  <tr>
+                    <th>Phương Pháp</th>
+                    <th>PSNR (dB) <button type="button" class="q-mark-btn" data-defense-key="col_psnr"
+                        title="Giải thích chi tiết chỉ số PSNR">(?)</button></th>
+                    <th>&Delta; PSNR <button type="button" class="q-mark-btn" data-defense-key="col_delta_psnr"
+                        title="Giải thích độ chênh lệch Δ PSNR">(?)</button></th>
+                    <th>SSIM <button type="button" class="q-mark-btn" data-defense-key="col_ssim"
+                        title="Giải thích chi tiết chỉ số SSIM">(?)</button></th>
+                    <th>&Delta; SSIM <button type="button" class="q-mark-btn" data-defense-key="col_delta_ssim"
+                        title="Giải thích độ chênh lệch Δ SSIM">(?)</button></th>
+                    <th>NIQE <button type="button" class="q-mark-btn" data-defense-key="col_niqe"
+                        title="Giải thích chi tiết chỉ số NIQE">(?)</button></th>
+                    <th>&Delta; NIQE <button type="button" class="q-mark-btn" data-defense-key="col_delta_niqe"
+                        title="Giải thích độ chênh lệch Δ NIQE (Dấu âm là tốt)">(?)</button></th>
+                    <th>Thời gian <button type="button" class="q-mark-btn" data-defense-key="col_time"
+                        title="Giải thích thời gian thực thi & độ phức tạp O(.)">(?)</button></th>
+                  </tr>
+                </thead>
+                <tbody id="tableBodyComparison">
+                  <!-- Populated via JavaScript -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- CARD KHUYẾN NGHỊ & RADAR CHART -->
+            <div class="summary-evaluation-card">
+              <div class="rec-header">
+                <i class="fa-solid fa-trophy award-icon"></i>
+                <div>
+                  <h4>Đánh Giá Tổng Quát & Khuyến Nghị</h4>
+                  <span class="rec-badge" id="recBadgeName">CLAHE</span>
+                </div>
+              </div>
+              <p class="rec-desc" id="recDescText">
+                CLAHE đạt mức cân bằng tối ưu nhất cho ảnh phong cảnh ngoại cảnh thiếu sáng: Vừa khôi phục rõ nét các
+                vùng tối cục bộ, vừa ngăn chặn khuếch đại nhiễu hạt nhờ cơ chế Clip Limit và nội suy song tuyến.
+              </p>
+              <div class="radar-chart-wrapper">
+                <canvas id="radarChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= KHU VỰC BENCHMARK DIỆN RỘNG (BATCH EVALUATION) ================= -->
+        <section class="section-container">
+          <div class="section-header">
+            <div class="section-title">
+              <i class="fa-solid fa-flask-vial"></i>
+              <span>Thực Nghiệm Diện Rộng Trên Dataset (Batch Benchmark Mode)</span>
+            </div>
+            <div class="batch-controls">
+              <span class="samples-label">Số mẫu kiểm thử:</span>
+              <input type="number" id="batchSamplesInput" value="20" min="5" max="100" class="input-number-sm">
+              <button class="btn-secondary-action" id="btnRunBatch">
+                <i class="fa-solid fa-play"></i> Chạy Benchmark Hàng Loạt
+              </button>
+            </div>
+          </div>
+
+          <div class="batch-results-area" id="batchResultsArea">
+            <div class="empty-batch-state" id="emptyBatchState">
+              <i class="fa-solid fa-chart-line"></i>
+              <p>Chưa có dữ liệu benchmark hàng loạt. Nhấn <b>"Chạy Benchmark Hàng Loạt"</b> để tự động đánh giá 20-50
+                mẫu ảnh ngẫu nhiên từ Dataset và xuất báo cáo CSV học thuật.</p>
+            </div>
+
+            <div class="batch-content-loaded" id="batchContentLoaded" style="display: none;">
+              <div class="batch-stats-summary-row" id="batchStatsRow">
+                <!-- Summary cards filled by JS -->
+              </div>
+              <div class="batch-download-bar">
+                <span>Báo cáo hoàn tất. Tải toàn bộ bảng thông số để phục vụ viết báo cáo Word & Slide:</span>
+                <a href="/api/download_csv" class="btn-download-csv" id="btnDownloadCsv">
+                  <i class="fa-solid fa-file-csv"></i> Tải Báo Cáo CSV (benchmark_results.csv)
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAL / DASHBOARD GIẢI THÍCH CHI TIẾT Ý NGHĨA KẾT QUẢ & CÁCH TÍNH (NÚT ?) -->
+    <!-- ========================================================================= -->
+    <div class="modal-backdrop" id="modalExplanationDashboard">
+      <div class="modal-card-dashboard">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <div class="modal-icon-badge"><i class="fa-solid fa-graduation-cap"></i></div>
+            <div>
+              <h3>Bảng Giải Thích Chi Tiết Ý Nghĩa Từng Kết Quả & Cơ Sở Tính Toán</h3>
+              <p class="modal-subtitle">Giải thích toàn diện các chỉ số IQA, nguyên lý 4 thuật toán và cách tính toán
+                chi tiết</p>
+            </div>
+          </div>
+          <button class="btn-modal-close" id="btnCloseModal"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="modal-nav-tabs">
+          <button class="modal-tab-btn active" data-target="sec-metrics">1. Bộ Ba Chỉ Số IQA (PSNR, SSIM, NIQE)</button>
+          <button class="modal-tab-btn" data-target="sec-algorithms">2. Cơ Sở Toán Học 4 Thuật Toán</button>
+          <button class="modal-tab-btn" data-target="sec-color">3. Kỹ Thuật Chống Lệch Màu (HSV/LAB)</button>
+          <button class="modal-tab-btn" data-target="sec-table-guide">4. Hướng Dẫn Đọc Bảng & Biểu Đồ</button>
+        </div>
+
+        <div class="modal-body-scroll">
+          <!-- PHẦN 1: BỘ BA CHỈ SỐ IQA -->
+          <div class="modal-section active" id="sec-metrics">
+            <h4 class="section-h4"><i class="fa-solid fa-calculator"></i> 1. Ý Nghĩa & Cách Tính Chi Tiết Bộ Ba Chỉ Số
+              IQA</h4>
+
+            <!-- PSNR -->
+            <div class="expl-card">
+              <div class="expl-title-row">
+                <span class="badge-metric psnr">PSNR</span>
+                <h5>Tỷ Số Tín Hiệu Cực Đại Trên Nhiễu (Peak Signal-to-Noise Ratio)</h5>
+              </div>
+              <p><strong>Ý nghĩa vật lý:</strong> Đo lường sai lệch năng lượng tín hiệu giữa ảnh sau xử lý so với ảnh
+                gốc chuẩn (Ground Truth). Đơn vị đo là decibel (dB).</p>
+              <div class="expl-latex">
+                $$\text{MSE} = \frac{1}{M \cdot N} \sum_{i=0}^{M-1} \sum_{j=0}^{N-1} \left[ I_{\text{clean}}(i, j) -
+                I_{\text{enhanced}}(i, j) \right]^2$$
+                $$\text{PSNR} = 10 \cdot \log_{10}\left( \frac{\text{MAX}_I^2}{\text{MSE}} \right) = 10 \cdot
+                \log_{10}\left( \frac{255^2}{\text{MSE}} \right) \quad (\text{dB})$$
+              </div>
+              <ul class="expl-list">
+                <li><strong>Cách tính:</strong> Bước 1 tính sai số bình phương trung bình (MSE) giữa từng điểm ảnh; Bước
+                  2 lấy logarit cơ số 10 của tỷ lệ giữa giá trị cực đại có thể có ($255^2 = 65025$) với MSE.</li>
+                <li><strong>Ngưỡng đánh giá:</strong>
+                  <ul>
+                    <li>$\text{PSNR} > 30\text{ dB}$: Chất lượng khôi phục rất tốt, mắt người khó phân biệt sai số.</li>
+                    <li>$20\text{ dB} - 30\text{ dB}$: Chấp nhận được đối với các bài toán kéo sáng dải động lớn.</li>
+                    <li>$\text{PSNR} < 20\text{ dB}$: Sai số lớn hoặc độ sáng bị thay đổi quá mạnh.</li>
+                  </ul>
+                </li>
+                <li><strong>Lưu ý học thuật quan trọng:</strong> Khi kéo sáng một bức ảnh thiếu sáng, các giá trị pixel
+                  được nâng lên đáng kể so với ảnh tối ban đầu. Vì vậy, PSNR có thể giảm là hoàn toàn bình thường do
+                  phép so sánh pixel-by-pixel bị ảnh hưởng bởi độ chênh lệch cường độ sáng trung bình.</li>
+              </ul>
+            </div>
+
+            <!-- SSIM -->
+            <div class="expl-card">
+              <div class="expl-title-row">
+                <span class="badge-metric ssim">SSIM</span>
+                <h5>Độ Tương Đồng Cấu Trúc (Structural Similarity Index Measure)</h5>
+              </div>
+              <p><strong>Ý nghĩa vật lý:</strong> Mô phỏng trực tiếp hệ thống thị giác người (Human Visual System -
+                HVS). Thay vì chỉ đo sai số pixel như PSNR, SSIM đánh giá sự bảo toàn về cấu trúc hình học, kết cấu bề
+                mặt và độ tương phản của cảnh quan.</p>
+              <div class="expl-latex">
+                $$\text{SSIM}(x, y) = [l(x, y)]^\alpha \cdot [c(x, y)]^\beta \cdot [s(x, y)]^\gamma$$
+                $$\text{SSIM}(x, y) = \frac{(2\mu_x\mu_y + C_1)(2\sigma_{xy} + C_2)}{(\mu_x^2 + \mu_y^2 +
+                C_1)(\sigma_x^2 + \sigma_y^2 + C_2)}$$
+              </div>
+              <ul class="expl-list">
+                <li><strong>3 Thành phần cấu thành:</strong>
+                  <ul>
+                    <li>Độ sáng (Luminance): $l(x, y) = \frac{2\mu_x\mu_y + C_1}{\mu_x^2 + \mu_y^2 + C_1}$</li>
+                    <li>Độ tương phản (Contrast): $c(x, y) = \frac{2\sigma_x\sigma_y + C_2}{\sigma_x^2 + \sigma_y^2 +
+                      C_2}$</li>
+                    <li>Cấu trúc (Structure): $s(x, y) = \frac{\sigma_{xy} + C_3}{\sigma_x\sigma_y + C_3}$</li>
+                  </ul>
+                </li>
+                <li><strong>Dải giá trị:</strong> Nằm trong khoảng $[-1, 1]$, thực tế với ảnh thường nằm trong $[0, 1]$.
+                  <strong>Giá trị càng gần 1.0 nghĩa là cấu trúc đường biên, tán cây, đồi núi càng được bảo toàn nguyên
+                    vẹn.</strong>
+                </li>
+              </ul>
+            </div>
+
+            <!-- NIQE -->
+            <div class="expl-card">
+              <div class="expl-title-row">
+                <span class="badge-metric niqe">NIQE</span>
+                <h5>Độ Tự Nhiên Không Tham Chiếu (Naturalness Image Quality Evaluator)</h5>
+              </div>
+              <p><strong>Ý nghĩa vật lý:</strong> Là chỉ số đánh giá chất lượng ảnh mù (No-Reference Blind IQA) -
+                <strong>không cần ảnh gốc làm đối chứng</strong>. Được phát triển bởi Mittal et al. (IEEE SPL 2013), dựa
+                trên mô hình thống kê cảnh tự nhiên (Natural Scene Statistics - NSS).
+              </p>
+              <div class="expl-latex">
+                $$D(\nu_1, \nu_2, \Sigma_1, \Sigma_2) = \sqrt{ (\nu_1 - \nu_2)^T \left( \frac{\Sigma_1 + \Sigma_2}{2}
+                \right)^{-1} (\nu_1 - \nu_2) }$$
+              </div>
+              <ul class="expl-list">
+                <li><strong>Cách tính:</strong> Chuẩn hóa trừ trung bình cục bộ MSCN (Mean Subtracted Contrast
+                  Normalized), khớp các hệ số vào mô hình phân phối Gauss tổng quát bất đối xứng (AGGD), trích xuất 36
+                  đặc trưng thống kê và tính khoảng cách Mahalanobis so với tập ảnh tự nhiên chuẩn (Pristine Corpus).
+                </li>
+                <li><strong>Quy tắc giải thích:</strong> <strong>ĐIỂM NIQE CÀNG NHỎ THÌ ẢNH CÀNG TỰ NHIÊN, CÀNG
+                    ĐẸP!</strong> (Thường từ 2.5 - 5.5 là ảnh rất tự nhiên; trên 8.0 là ảnh bị méo mó, nhiễu hạt hoặc
+                  cháy sáng quá đà).</li>
+                <li><strong>Ứng dụng thực tế:</strong> Đây là chỉ số then chốt khi người dùng tải lên ảnh chụp thực tế
+                  ngoài đời (không có ảnh gốc Ground Truth để tính PSNR/SSIM).</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- PHẦN 2: CƠ SỞ TOÁN HỌC 4 THUẬT TOÁN -->
+          <div class="modal-section" id="sec-algorithms">
+            <h4 class="section-h4"><i class="fa-solid fa-code"></i> 2. Cơ Sở Toán Học & Quy Trình Tính Toán 4 Thuật Toán
+            </h4>
+
+            <!-- HE -->
+            <div class="expl-card">
+              <h5>Thuật Toán 1: Histogram Equalization (HE Toàn Cục)</h5>
+              <div class="expl-latex">
+                $$p_r(r_k) = \frac{n_k}{M \cdot N}, \quad k = 0, 1, \dots, L-1$$
+                $$s_k = T(r_k) = (L - 1) \sum_{j=0}^k p_r(r_j) = \frac{L - 1}{M \cdot N} \sum_{j=0}^k n_j$$
+              </div>
+              <p><strong>Cách tính:</strong> Đếm số lượng điểm ảnh tại từng mức xám $n_k$, tính hàm phân phối tích lũy
+                CDF từ 0 đến $k$, nhân với $(L - 1 = 255)$ để thu được hàm biến đổi ánh xạ $T(r_k)$. Áp dụng hàm này cho
+                toàn bộ điểm ảnh trên kênh độ sáng V.</p>
+              <p><strong>Đánh giá thực nghiệm phong cảnh:</strong> Ưu điểm là làm sáng rất mạnh vùng tối, nhưng nhược
+                điểm lớn là làm bệt màu nền trời và khuếch đại nhiễu hạt do trải phẳng toàn cục.</p>
+            </div>
+
+            <!-- CLAHE -->
+            <div class="expl-card">
+              <h5>Thuật Toán 2: Contrast Limited Adaptive Histogram Equalization (CLAHE)</h5>
+              <div class="expl-latex">
+                $$N_{\text{avg}} = \frac{M_{\text{tile}} \cdot N_{\text{tile}}}{L}, \quad N_{\text{clip}} = \beta \cdot
+                N_{\text{avg}} \quad (L = 256)$$
+                $$R = \frac{1}{256} \sum_{k=0}^{255} \max(0, h(k) - N_{\text{clip}}), \quad h_{\text{mod}}(k) =
+                \min(h(k), N_{\text{clip}}) + R$$
+              </div>
+              <p><strong>Cách tính:</strong></p>
+              <ol class="expl-ol">
+                <li>Chia kênh độ sáng thành lưới các ô nhỏ (Tiles) kích thước $8 \times 8$.</li>
+                <li>Tính histogram cục bộ của từng ô. Cắt phẳng các bin vượt ngưỡng $N_{\text{clip}}$ theo hệ số Clip
+                  Limit $\beta$.</li>
+                <li>Lấy tổng phần dư bị cắt chia đều $R$ vào 256 bin của ô đó.</li>
+                <li>Tính hàm CDF điều hòa $h_{\text{mod}}$ cho từng ô.</li>
+                <li>Sử dụng <strong>nội suy song tuyến tính (Bilinear Interpolation)</strong> giữa 4 ô lân cận để tính
+                  mức xám cho từng pixel, loại bỏ hoàn toàn hiện tượng đường viền bàn cờ.</li>
+              </ol>
+            </div>
+
+            <!-- Gamma -->
+            <div class="expl-card">
+              <h5>Thuật Toán 3: Gamma Correction (Hiệu Chỉnh Lũy Thừa Phi Tuyến)</h5>
+              <div class="expl-latex">
+                $$I_{\text{norm}}(x, y) = \frac{V(x, y)}{255}, \quad V_{\text{out}}(x, y) = 255 \cdot \left[
+                I_{\text{norm}}(x, y) \right]^\gamma$$
+              </div>
+              <p><strong>Cách tính:</strong> Tạo bảng tra cứu Lookup Table (LUT) 256 giá trị ứng với hàm lũy thừa. Khi
+                $\gamma < 1.0$ (ví dụ $\gamma=0.5$), đường cong biến đổi lồi lên trên, kéo sáng các pixel mức xám thấp
+                  $(0 - 80)$ mà hầu như không làm bão hòa các pixel mức xám cao $(200 - 255)$.</p>
+            </div>
+
+            <!-- MSR -->
+            <div class="expl-card">
+              <h5>Thuật Toán 4: Multi-Scale Retinex (MSR)</h5>
+              <div class="expl-latex">
+                $$I(x, y) = R(x, y) \cdot L(x, y) \implies \ln(R) = \ln(I) - \ln(L)$$
+                $$R_{\text{MSR}}(x, y) = \sum_{k=1}^K w_k \cdot \left[ \ln(I(x, y)) - \ln(I(x, y) * G_k(x, y)) \right]$$
+              </div>
+              <p><strong>Cách tính:</strong> Sử dụng 3 bộ lọc Gauss với quy mô $\sigma_1 = 15$ (giữ chi tiết vi mô),
+                $\sigma_2 = 80$ (tương phản trung gian), $\sigma_3 = 250$ (cân bằng ánh sáng toàn cảnh) với trọng số
+                $w_1 = w_2 = w_3 = 1/3$. Sau đó co giãn dải động theo phân vị (Dynamic Range Clipping) để đưa về dải
+                $[0, 255]$.</p>
+            </div>
+          </div>
+
+          <!-- PHẦN 3: KỸ THUẬT CHỐNG LỆCH MÀU -->
+          <div class="modal-section" id="sec-color">
+            <h4 class="section-h4"><i class="fa-solid fa-palette"></i> 3. Kỹ Thuật Tách Biệt Không Gian Màu Chống
+              Lệch/Bệt Màu</h4>
+            <div class="expl-card">
+              <h5>Vì sao KHÔNG ĐƯỢC áp dụng trực tiếp thuật toán lên 3 kênh RGB?</h5>
+              <p>Trong không gian màu RGB, cả 3 kênh Red, Green, Blue đều chứa thông tin về độ sáng lẫn màu sắc. Nếu cân
+                bằng histogram độc lập trên 3 kênh R, G, B, tỷ lệ $R:G:B$ tại mỗi điểm ảnh sẽ bị phá vỡ, dẫn đến hiện
+                tượng <strong>lệch màu nghiêm trọng (Color Cast)</strong>, cỏ cây bị ngả sang màu tím hoặc trời đêm
+                chuyển sang màu xám xịt nhân tạo.</p>
+              <h5>Giải pháp chuẩn học thuật: Xử lý trên không gian HSV hoặc CIELAB</h5>
+              <div class="expl-latex">
+                $$\text{BGR} \xrightarrow{\text{cv2.cvtColor}} \text{HSV} \xrightarrow{\text{cv2.split}} (H, S, V)$$
+                $$V_{\text{enhanced}} = \text{Algorithm}(V) \quad (H, S \text{ giữ nguyên 100\%})$$
+                $$(H, S, V_{\text{enhanced}}) \xrightarrow{\text{cv2.merge}} \text{HSV}_{\text{new}}
+                \xrightarrow{\text{cv2.cvtColor}} \text{BGR}_{\text{output}}$$
+              </div>
+              <p>Bằng cách này, toàn bộ thông số về sắc thái màu (Hue) và độ bão hòa (Saturation) của cảnh quan thiên
+                nhiên được bảo tồn tuyệt đối, chỉ có độ sáng thực tế (Value / Lightness) được cải thiện.</p>
+            </div>
+          </div>
+
+          <!-- PHẦN 4: HƯỚNG DẪN ĐỌC BẢNG & BIỂU ĐỒ -->
+          <div class="modal-section" id="sec-table-guide">
+            <h4 class="section-h4"><i class="fa-solid fa-chart-pie"></i> 4. Hướng Dẫn Đọc Biểu Đồ & Bảng Xếp Hạng</h4>
+            <!-- GIẢI THÍCH CHI TIẾT 7 CỘT BẢNG SO SÁNH Ô 5 -->
+            <div class="expl-card">
+              <h5><i class="fa-solid fa-table"></i> Giải Thích Chi Tiết 7 Cột Trong Bảng Đo Lường Ô 5:</h5>
+              <div class="expl-latex">
+                $$\text{PSNR} = 10 \cdot \log_{10}\left(\frac{255^2}{\text{MSE}}\right), \quad \Delta\text{PSNR} =
+                \text{PSNR}_{\text{proc}} - \text{PSNR}_{\text{input}}$$
+                $$\text{SSIM} = \frac{(2\mu_x\mu_y + C_1)(2\sigma_{xy} + C_2)}{(\mu_x^2 + \mu_y^2 + C_1)(\sigma_x^2 +
+                \sigma_y^2 + C_2)}, \quad \Delta\text{SSIM} = \text{SSIM}_{\text{proc}} - \text{SSIM}_{\text{input}}$$
+                $$\Delta\text{NIQE} = \text{NIQE}_{\text{proc}} - \text{NIQE}_{\text{input}} \quad (\text{Quy ước: Dấu
+                âm } \Delta\text{NIQE} < 0 \text{ là cải thiện tốt})$$ </div>
+                  <ul class="expl-list">
+                    <li><strong>1. Cột PSNR (dB):</strong> Tỷ số tín hiệu cực đại trên nhiễu đo sai số bình phương trung
+                      bình (MSE). Giá trị càng lớn nghĩa là năng lượng sai lệch pixel so với ảnh chuẩn càng nhỏ. Ở bài
+                      toán ảnh đêm, mức $10 - 20\text{ dB}$ là bình thường do mức xám được kéo lệch mạnh khỏi ảnh tối.
+                    </li>
+                    <li><strong>2. Cột &Delta; PSNR (dB):</strong> Mức độ tăng/giảm so với ảnh suy thoái đầu vào
+                      ($\text{PSNR}_{\text{proc}} - \text{PSNR}_{\text{input}}$). Dương ($>0$) là giảm sai số năng
+                      lượng, âm ($<0$) là tăng sai số pixel do co giãn cục bộ thích nghi.</li>
+                    <li><strong>3. Cột SSIM:</strong> Độ tương đồng cấu trúc theo thị giác người HVS (dải $[0, 1.0]$).
+                      Đánh giá sự bảo toàn kết cấu bề mặt, tán cây, đồi núi và các đường nét kiến trúc. Càng gần $1.0$
+                      càng hoàn hảo.</li>
+                    <li><strong>4. Cột &Delta; SSIM:</strong> Mức độ phục hồi cấu trúc thực sự
+                      ($\text{SSIM}_{\text{proc}} - \text{SSIM}_{\text{input}}$). Bắt buộc phải dương ($>0$) để chứng
+                      minh thuật toán đã cứu vãn và làm rõ nét các chi tiết bị bóng tối nuốt chửng. MSR thường dẫn đầu ở
+                      chỉ số này.</li>
+                    <li><strong>5. Cột NIQE:</strong> Độ tự nhiên mù không tham chiếu (Blind IQA). <strong>Điểm càng nhỏ
+                        ảnh càng tự nhiên!</strong> (Ngưỡng đẹp $2.5 - 5.5$, trên $8.0$ là ảnh bị biến dạng/nhiễu hạt).
+                    </li>
+                    <li><strong>6. Cột &Delta; NIQE:</strong> Độ thay đổi tính tự nhiên ($\text{NIQE}_{\text{proc}} -
+                      \text{NIQE}_{\text{input}}$). Do quy tắc NIQE càng nhỏ càng tốt, nên <strong>$\Delta\text{NIQE} <
+                          0$ (màu xanh lá) là điểm cải thiện tốt</strong> (ảnh tự nhiên hơn ảnh đầu vào); nếu
+                          $\Delta\text{NIQE} > 0$ nghĩa là thuật toán làm ảnh bị gắt sáng hoặc tăng hạt nhiễu.</li>
+                    <li><strong>7. Cột Thời Gian (ms):</strong> Thời gian thực thi đo bằng mili-giây. Để đáp ứng video
+                      thời gian thực ($\ge 30\text{ FPS}$), thời gian xử lý mỗi khung hình phải $< 33.3\text{ ms}$
+                        (CLAHE, Gamma, HE đáp ứng tốt; MSR cần tăng tốc GPU/FFT).</li>
+                  </ul>
+              </div>
+
+              <div class="expl-card">
+                <h5>Cách đọc Biểu Đồ Histogram (256 Mức Xám):</h5>
+                <ul class="expl-list">
+                  <li><strong>Ảnh đầu vào thiếu sáng:</strong> Đường biểu diễn bị dồn cục ở góc trái (mức xám $0 - 50$),
+                    vùng sáng $(150 - 255)$ gần như bằng 0.</li>
+                  <li><strong>Ảnh sau khi xử lý thành công:</strong> Đỉnh biểu đồ dịch chuyển đều về giữa dải $(100 -
+                    180)$, phân phối trải rộng mượt mà, thể hiện các chi tiết bóng tối đã được kéo sáng và phân bổ tự
+                    nhiên.</li>
+                </ul>
+                <h5>Quy chuẩn đánh giá chọn thuật toán tốt nhất:</h5>
+                <table class="expl-mini-table">
+                  <thead>
+                    <tr>
+                      <th>Tiêu chí</th>
+                      <th>Thuật toán tối ưu</th>
+                      <th>Lý do ứng dụng thực tế</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Cân bằng tổng thể tốt nhất</td>
+                      <td><strong>CLAHE</strong></td>
+                      <td>Bảo toàn cấu trúc (SSIM cao), hạn chế nhiễu hạt, tốc độ nhanh.</td>
+                    </tr>
+                    <tr>
+                      <td>Tự nhiên nhất cảnh quan</td>
+                      <td><strong>MSR hoặc Gamma</strong></td>
+                      <td>Khôi phục ánh sáng mềm mại, không gây gắt biên, NIQE thấp.</td>
+                    </tr>
+                    <tr>
+                      <td>Tốc độ xử lý nhanh nhất</td>
+                      <td><strong>HE hoặc Gamma</strong></td>
+                      <td>Tính toán tức thì qua hàm toàn cục hoặc bảng tra cứu LUT.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- ========================================================== -->
+      <!-- THẺ PHẢN BIỆN HỌC THUẬT 3 TẦNG (FLOATING CARD POPOVER) -->
+      <!-- ========================================================== -->
+      <div id="xai-defense-popover" class="xai-defense-popover">
+        <div class="xai-pop-header">
+          <div class="xai-pop-title" id="xai-pop-title">🛡️ Luận Điểm Phản Biện</div>
+          <button class="xai-pop-close" id="btnCloseDefensePopover" title="Đóng"
+            onclick="closeDefensePopover()">✕</button>
+        </div>
+        <div class="xai-tier tier-math">
+          <span class="xai-tier-label"><i class="fa-solid fa-square-root-variable"></i> 1. Bản chất Toán học & Cơ
+            chế</span>
+          <div id="xai-tier-math-content"></div>
+        </div>
+        <div class="xai-tier tier-live">
+          <span class="xai-tier-label"><i class="fa-solid fa-chart-line"></i> 2. Phân tích Thực nghiệm Đang chạy</span>
+          <div id="xai-tier-live-content"></div>
+        </div>
+        <div class="xai-tier tier-defense">
+          <span class="xai-tier-label"><i class="fa-solid fa-shield-halved"></i> 3. Câu hỏi xoáy & Cách trả lời (Phản
+            biện Vấn đáp)</span>
+          <div id="xai-tier-defense-content"></div>
+        </div>
+        <div class="xai-pop-footer">
+          <button type="button" class="btn-xai-drawer-link" onclick="toggleMasterDrawer()">
+            <i class="fa-solid fa-book-open"></i> Chi Tiết
+          </button>
+        </div>
+      </div>
+
+      <!-- ========================================================== -->
+      <!-- DRAWER TỔNG CHO NÚT "GIẢI THÍCH KẾT QUẢ (?)" TRÊN HEADER -->
+      <!-- ========================================================== -->
+      <div class="drawer-backdrop" id="xai-backdrop" onclick="toggleMasterDrawer()"></div>
+      <div id="xai-master-drawer" class="xai-master-drawer">
+        <div class="xai-drawer-header">
+          <div class="xai-drawer-title-wrap">
+            <i class="fa-solid fa-graduation-cap drawer-brand-icon"></i>
+            <div>
+              <h3>Ý Nghĩa</h3>
+              <p class="xai-drawer-subtitle">Đối chiếu định lượng thời gian thực & chiến thuật bảo vệ đồ án</p>
+            </div>
+          </div>
+          <button class="xai-pop-close" onclick="toggleMasterDrawer()" title="Đóng">✕</button>
+        </div>
+        <div id="xai-drawer-dynamic-body" class="xai-drawer-scroll">
+          <!-- Nội dung tự động nạp bằng JS -->
+        </div>
+      </div>
+      <!-- ========================================================== -->
+      <!-- LIGHTBOX / ZOOM TRÌNH CHIẾU ẢNH TOÀN MÀN HÌNH (Ô 1 & Ô 2) -->
+      <!-- ========================================================== -->
+      <div class="image-lightbox-backdrop" id="imageLightboxBackdrop">
+        <div class="image-lightbox-container" id="imageLightboxContainer">
+          <!-- Header thanh công cụ trình chiếu -->
+          <div class="lightbox-toolbar">
+            <div class="lightbox-title-wrap">
+              <i class="fa-solid fa-expand lightbox-brand-icon"></i>
+              <div>
+                <h4 id="lightboxTitle">Ảnh Gốc (Ground Truth)</h4>
+                <span class="lightbox-subtitle" id="lightboxSubtitle">Quy trình &bull; Độ phân giải gốc</span>
+              </div>
+            </div>
+
+            <div class="lightbox-metrics-pill" id="lightboxMetricsPill" style="display:none;">
+              <!-- Live metrics badges dynamically injected -->
+            </div>
+
+            <div class="lightbox-actions">
+              <button type="button" class="btn-lightbox-compare" id="btnLightboxCompareToggle"
+                title="Nhấn hoặc giữ phím Space để đối chiếu nhanh với ảnh thiếu sáng gốc">
+                <i class="fa-solid fa-code-compare"></i>
+                <span>So Với Ảnh Gốc (Space)</span>
+              </button>
+              <button type="button" class="btn-lightbox-action" id="btnLightboxZoomOut" title="Thu nhỏ (-)">
+                <i class="fa-solid fa-magnifying-glass-minus"></i>
+              </button>
+              <button type="button" class="btn-lightbox-action" id="btnLightboxZoomReset"
+                title="Đặt lại kích thước (1:1)">
+                1:1
+              </button>
+              <button type="button" class="btn-lightbox-action" id="btnLightboxZoomIn" title="Phóng to (+)">
+                <i class="fa-solid fa-magnifying-glass-plus"></i>
+              </button>
+              <button type="button" class="btn-lightbox-action" id="btnLightboxFullscreen" title="Toàn màn hình (F)">
+                <i class="fa-solid fa-maximize"></i>
+              </button>
+              <button type="button" class="btn-lightbox-close" id="btnLightboxClose" title="Đóng (ESC)">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Vùng hiển thị ảnh phóng to -->
+          <div class="lightbox-img-stage" id="lightboxStage">
+            <button type="button" class="lightbox-nav-btn prev" id="btnLightboxPrev"
+              title="Ảnh trước (Phím mũi tên trái &larr;)">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+
+            <div class="lightbox-img-wrapper" id="lightboxImgWrapper">
+              <img id="lightboxImg" src="" alt="Phóng to trình chiếu">
+            </div>
+
+            <button type="button" class="lightbox-nav-btn next" id="btnLightboxNext"
+              title="Ảnh kế tiếp (Phím mũi tên phải &rarr;)">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+
+          <!-- Thanh điều hướng 7 quy trình trực quan -->
+          <div class="lightbox-stages-nav" id="lightboxStagesNav">
+            <button type="button" class="stage-nav-pill active" data-stage="0" title="Phím tắt: 1">
+              <span class="step-num">1</span> Ảnh Gốc (GT)
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="1" title="Phím tắt: 2">
+              <span class="step-num">2</span> Thiếu Sáng
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="2" title="Phím tắt: 3">
+              <span class="step-num">3</span> Khử Nhiễu
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="3" title="Phím tắt: 4">
+              <span class="step-num">4</span> HE
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="4" title="Phím tắt: 5">
+              <span class="step-num">5</span> CLAHE <i class="fa-solid fa-star"
+                style="color:#fde047; font-size:10px;"></i>
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="5" title="Phím tắt: 6">
+              <span class="step-num">6</span> Gamma
+            </button>
+            <button type="button" class="stage-nav-pill" data-stage="6" title="Phím tắt: 7">
+              <span class="step-num">7</span> MSR
+            </button>
+          </div>
+
+          <!-- Thanh chỉ dẫn phím tắt chân trang -->
+          <div class="lightbox-footer-hints">
+            <span><kbd>1</kbd>–<kbd>7</kbd> Nhảy quy trình</span>
+            <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> Chuyển tiếp</span>
+            <span><kbd>Space</kbd> So sánh ảnh gốc</span>
+            <span><kbd>+</kbd> <kbd>-</kbd> / <kbd>Cuộn chuột</kbd> Zoom</span>
+            <span><kbd>Kéo chuột</kbd> Pan ảnh</span>
+            <span><kbd>F</kbd> Toàn màn hình</span>
+            <span><kbd>ESC</kbd> Đóng</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fallback container for legacy popover references -->
+      <div id="paramPopover" class="param-popover" style="display: none;"></div>
+
+      <script src="app.js?v=3.0"></script>
+</body>
+
+</html>

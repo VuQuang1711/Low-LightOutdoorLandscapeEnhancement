@@ -1,0 +1,80 @@
+# ===================================================================================
+# ỨNG DỤNG SO SÁNH NGHIÊN CỨU KỸ THUẬT XỬ LÝ ẢNH
+# Cấu hình hệ thống & Tham số thực nghiệm (Universal XAI & 3-Tier Architecture)
+# ===================================================================================
+
+app:
+  name: "Ứng Dụng So Sánh Nghiên cứu kỹ thuật xử lý ảnh"
+  english_title: "A Comparative Study of Traditional Image Processing Techniques in Enhancing Low-Light Outdoor Landscape Images"
+  version: "1.0.0"
+  host: "127.0.0.1"
+  port: 8501
+
+dataset:
+  primary_dir: "dataset/dataset"
+  fallback_dir: "dataset"
+  allowed_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+  cache_max_images: 1000
+
+# Mô phỏng môi trường thiếu sáng cho ảnh phong cảnh ngoại cảnh
+low_light_simulation:
+  enabled: true
+  brightness_factor: 0.35     # Tỷ lệ giảm độ chói tuyến tính (0.1 - 0.7)
+  gamma_darkening: 2.2        # Hệ số nén gamma phi tuyến để mô phỏng vùng tối ban đêm
+
+# Mô phỏng nhiễu học thuật
+noise_simulation:
+  default_type: "gaussian"    # gaussian, salt_and_pepper, poisson, speckle, none
+  gaussian_sigma: 15.0        # Độ lệch chuẩn nhiễu Gauss
+  sp_amount: 0.02             # Tỷ lệ điểm ảnh nhiễu muối tiêu
+  speckle_var: 0.04           # Phương sai nhiễu đốm
+
+# Tiền xử lý khử nhiễu bảo tồn đường biên (Pre-denoising)
+pre_denoising:
+  enabled: true
+  default_method: "bilateral" # bilateral, nlm, median, none
+  bilateral:
+    d: 7
+    sigma_color: 50.0
+    sigma_space: 50.0
+  nlm:
+    h: 7.0
+    template_window_size: 7
+    search_window_size: 21
+  median:
+    ksize: 3
+
+# Cấu hình 4 thuật toán nâng cao chất lượng ảnh
+algorithms:
+  color_space: "HSV"          # HSV (xử lý kênh V) hoặc LAB (xử lý kênh L) - chống bệt/lệch màu
+  
+  # Thuật toán 1: Histogram Equalization (HE & Adaptive HE)
+  histogram_equalization:
+    type: "global"            # global (HE truyền thống) hoặc adaptive (AHE)
+  
+  # Thuật toán 2: Contrast Limited Adaptive Histogram Equalization (CLAHE)
+  clahe:
+    clip_limit: 3.0
+    tile_grid_size: [8, 8]
+  
+  # Thuật toán 3: Gamma Correction
+  gamma_correction:
+    gamma: 0.5                # gamma < 1.0 để kéo sáng vùng tối
+    auto_optimize: false      # Tự động tính toán gamma tối ưu dựa trên trung bình độ sáng
+  
+  # Thuật toán 4: Multi-Scale Retinex (MSR / MSRCR)
+  retinex:
+    scales: [15, 80, 250]     # 3 tỷ lệ Gaussian (Small, Medium, Large scales)
+    weights: [0.3333, 0.3333, 0.3334]
+    dynamic_clipping_percentile: 1.0  # Ngưỡng cắt co giãn dải động
+
+# Tiêu chuẩn đánh giá định lượng IQA
+metrics:
+  psnr: true
+  ssim: true
+  niqe: true
+
+# Đầu ra báo cáo & Benchmark
+outputs:
+  report_csv: "outputs/benchmark_results.csv"
+  temp_upload: "outputs/temp_web_upload.png"

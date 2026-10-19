@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Caches and temporary folders
+.pytest_cache/
+scratch_pptx_build/
+output_formulas/
+*.tmp
+*.log
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+.venv/
+__pycache__/
+*.py[cod]
+outputs/*.csv
+outputs/temp_web_upload.png
