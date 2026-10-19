@@ -1,11 +1,11 @@
-# ĐỒ ÁN XỬ LÝ ẢNH SỐ: NÂNG CAO CHẤT LƯỢNG ẢNH NGOẠI CẢNH THIẾU SÁNG
+# ĐỒ ÁN : NÂNG CAO CHẤT LƯỢNG ẢNH NGOẠI CẢNH THIẾU SÁNG
 ## A Comparative Study of Traditional Image Enhancement Techniques in Low-Light Outdoor Landscapes
 
 > **Đề tài:** Nghiên cứu và so sánh hiệu năng các kỹ thuật xử lý ảnh truyền thống (**Histogram Equalization**, **CLAHE**, **Gamma Correction**, **Multi-Scale Retinex**) trong bài toán phục hồi và tăng cường chất lượng ảnh phong cảnh ngoại cảnh chụp trong điều kiện ánh sáng yếu.
 
 ---
 
-## ⚡ HƯỚNG DẪN CHẠY NHANH TRONG 1 PHÚT (QUICK START)
+## ⚡ HƯỚNG DẪN THỰC HIỆN
 
 ### 1. Yêu cầu môi trường
 - Máy tính đã cài đặt **Python 3.9+** (khuyên dùng Python 3.10, 3.11 hoặc 3.12).
