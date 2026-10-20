@@ -181,17 +181,17 @@ Hệ thống được tổ chức chặt chẽ theo mô hình kiến trúc phân
 └──────────────────────────────────────┬─────────────────────────────────────────┘
                                        │ HTTP / REST API (FastAPI)
 ┌──────────────────────────────────────▼─────────────────────────────────────────┐
-│               TẦNG ĐIỀU PHỐI NGHIỆP VỤ (BUSINESS LOGIC LAYER)                 │
+│               TẦNG ĐIỀU PHỐI NGHIỆP VỤ (BUSINESS LOGIC LAYER)                  │
 │   - `web_server.py`: FastAPI endpoints (/api/process, /api/benchmark).         │
 │   - `model_logic.py`: Điều phối Pipeline tiền xử lý, chạy song song 4 mô hình, │
 │     thu thập chỉ số và xếp hạng học thuật.                                     │
-│   - `metrics.py`: Tính toán ma trận PSNR, SSIM, NIQE, Latency.                │
+│   - `metrics.py`: Tính toán ma trận PSNR, SSIM, NIQE, Latency.                 │
 └──────────────────────────────────────┬─────────────────────────────────────────┘
                                        │ Gọi hàm ma trận dữ liệu
 ┌──────────────────────────────────────▼─────────────────────────────────────────┐
 │               TẦNG DỮ LIỆU & THUẬT TOÁN LÕI (CORE & DATA LAYER)                │
 │   - `enhancement_modules.py`: Triển khai 4 thuật toán trên kênh độ sáng V/L*.  │
-│   - `data_loader.py`: Nạp ảnh an toàn Unicode, mô phỏng thiếu sáng & nhiễu.   │
+│   - `data_loader.py`: Nạp ảnh an toàn Unicode, mô phỏng thiếu sáng & nhiễu.    │
 │   - `resource_manager.py`: Thu hồi bộ nhớ RAM và dọn dẹp biến tạm.             │
 │   - `dataset/`: Bộ dữ liệu chuẩn hóa 50 ảnh phong cảnh ngoại cảnh LHQ.         │
 └────────────────────────────────────────────────────────────────────────────────┘
