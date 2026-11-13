@@ -19,7 +19,7 @@
 
 ---
 
-### 👥 DANH SÁCH THÀNH VIÊN NHÓM THỰC HIỆN ĐÈ TÀI
+### 👥 DANH SÁCH THÀNH VIÊN NHÓM THỰC HIỆN ĐỀ TÀI
 
 **1: Vũ Thế Quang**
 
