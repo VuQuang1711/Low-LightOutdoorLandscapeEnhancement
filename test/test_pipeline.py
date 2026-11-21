@@ -37,10 +37,19 @@ class TestEnhancementSuite(unittest.TestCase):
         self.assertEqual(dark.shape, self.dummy_img.shape)
         self.assertLess(np.mean(dark), np.mean(self.dummy_img))
 
-    def test_noise_application(self):
-        noisy = DataLoader.apply_noise(self.dummy_img, "gaussian", {"sigma": 15.0})
-        self.assertEqual(noisy.shape, self.dummy_img.shape)
-        self.assertFalse(np.array_equal(noisy, self.dummy_img))
+    def test_noise_application_and_reproducibility(self):
+        noisy_1 = DataLoader.apply_noise(self.dummy_img, "gaussian", {"sigma": 15.0}, seed=42)
+        noisy_2 = DataLoader.apply_noise(self.dummy_img, "gaussian", {"sigma": 15.0}, seed=42)
+        self.assertEqual(noisy_1.shape, self.dummy_img.shape)
+        self.assertFalse(np.array_equal(noisy_1, self.dummy_img))
+        self.assertTrue(np.array_equal(noisy_1, noisy_2))
+
+        sp = DataLoader.apply_noise(self.dummy_img, "salt_and_pepper", {"amount": 0.02}, seed=42)
+        self.assertEqual(sp.shape, self.dummy_img.shape)
+
+        speckle_low = DataLoader.apply_noise(self.dummy_img, "speckle", {"var": 0.01}, seed=42)
+        speckle_high = DataLoader.apply_noise(self.dummy_img, "speckle", {"var": 0.25}, seed=42)
+        self.assertFalse(np.array_equal(speckle_low, speckle_high))
 
     def test_four_enhancement_methods(self):
         # 1. HE
@@ -59,6 +68,12 @@ class TestEnhancementSuite(unittest.TestCase):
         msr_res, _, _ = EnhancementModules.apply_multi_scale_retinex(self.dummy_img, scales=[15, 80])
         self.assertEqual(msr_res.shape, self.dummy_img.shape)
 
+        # Difference map in HSV and LAB
+        diff_hsv = EnhancementModules.compute_difference_map(self.dummy_img, clahe_res, color_space="HSV")
+        diff_lab = EnhancementModules.compute_difference_map(self.dummy_img, clahe_res, color_space="LAB")
+        self.assertEqual(diff_hsv.shape, self.dummy_img.shape)
+        self.assertEqual(diff_lab.shape, self.dummy_img.shape)
+
     def test_metrics_calculation(self):
         psnr = ImageQualityMetrics.calculate_psnr(self.dummy_img, self.dummy_img)
         self.assertEqual(psnr, 100.0)
@@ -70,20 +85,33 @@ class TestEnhancementSuite(unittest.TestCase):
         self.assertIsInstance(niqe, float)
         self.assertGreater(niqe, 0.0)
 
-    def test_pipeline_execution(self):
+    def test_pipeline_execution_protocol_1_and_2(self):
         pipeline = ImageEnhancementComparisonPipeline()
+        # Protocol 1: synthetic degradation with GT
         res = pipeline.process_comparison(
             image_input=self.dummy_img,
             simulate_low_light=True,
             noise_type="gaussian",
-            denoise_method="bilateral"
+            denoise_method="bilateral",
+            noise_seed=42,
         )
         self.assertTrue(res["ground_truth_available"])
-        self.assertIn("he", res["methods"])
-        self.assertIn("clahe", res["methods"])
-        self.assertIn("gamma", res["methods"])
-        self.assertIn("msr", res["methods"])
+        for key in ("he", "clahe", "gamma", "msr"):
+            self.assertIn(key, res["methods"])
         self.assertIn("overall_recommended", res["rankings"])
+        self.assertIn("composite_scores", res["rankings"])
+        self.assertEqual(set(res["rankings"]["composite_scores"].keys()), {"he", "clahe", "gamma", "msr"})
+
+        # Protocol 2: real-world upload without low-light simulation -> No-Reference NIQE only
+        res_real = pipeline.process_comparison(
+            image_input=self.dummy_img,
+            simulate_low_light=False,
+            denoise_method="bilateral",
+        )
+        self.assertFalse(res_real["ground_truth_available"])
+        self.assertTrue(np.array_equal(res_real["degraded_img"], self.dummy_img))
+        self.assertIsNone(res_real["methods"]["clahe"]["metrics"]["psnr"])
+        self.assertIsNotNone(res_real["methods"]["clahe"]["metrics"]["niqe"])
 
     def test_resource_cleanup(self):
         cleanup_memory()

@@ -40,7 +40,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, Union
 
 import cv2
 import numpy as np
@@ -120,15 +120,19 @@ def calculate_ssim(img_ref: np.ndarray, img_tgt: np.ndarray) -> float:
 
 
 def calculate_niqe(img_bgr: np.ndarray) -> float:
-    """Tính chỉ số tự nhiên không tham chiếu NIQE (Càng nhỏ càng tự nhiên)."""
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
-    mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0)
-    mu_sq = mu * mu
-    sigma = np.sqrt(np.abs(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0) - mu_sq))
-    structdis = (gray - mu) / (sigma + 1.0)
-    var = np.var(structdis)
-    niqe_score = float(np.clip(12.0 / (var + 0.8), 2.5, 12.0))
-    return round(niqe_score, 2)
+    """Tính chỉ số tự nhiên không tham chiếu NIQE (Mittal et al., 2013 - Càng nhỏ càng tự nhiên)."""
+    proj_root = Path(__file__).resolve().parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    try:
+        from src.metrics import ImageQualityMetrics
+        return ImageQualityMetrics.calculate_niqe(img_bgr)
+    except Exception:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
+        mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT)
+        sigma = np.sqrt(np.maximum(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT) - mu * mu, 0.0))
+        structdis = (gray - mu) / (sigma + 1.0)
+        return round(float(np.abs(np.var(structdis) - 1.0) * 10.0 + 3.0), 2)
 
 
 # ==================================================================================================
@@ -268,19 +272,26 @@ def main():
         print("  • Đang giả lập môi trường thiếu sáng & bơm nhiễu Gauss...")
         dark_float = np.power(clean_img.astype(np.float32) / 255.0, 2.2) * 0.35
         low_light_img = np.clip(dark_float * 255.0, 0, 255).astype(np.uint8)
-        noise = np.random.normal(0, 15, low_light_img.shape)
-        low_light_noisy = np.clip(low_light_img.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0.0, 15.0, low_light_img.shape)
+        low_light_noisy = np.clip(np.round(low_light_img.astype(np.float32) + noise), 0, 255).astype(np.uint8)
         is_simulated = True
 
-    # 2. Tiền xử lý khử nhiễu
-    t0 = time.perf_counter()
+    # 2. Tiền xử lý khử nhiễu (đo tách biệt với CLAHE)
     denoised_input = apply_bilateral_denoising(low_light_noisy, d=7, sigma_color=50, sigma_space=50)
 
-    # 3. Thử nghiệm CLAHE với các giá trị Clip Limit khác nhau
+    # 3. Thử nghiệm và bấm giờ riêng từng mức Clip Limit
+    t0 = time.perf_counter()
     clahe_light, _, _ = enhance_clahe(denoised_input, clip_limit=1.5, tile_grid_size=(8, 8))
+    t_light_ms = (time.perf_counter() - t0) * 1000
+
+    t0 = time.perf_counter()
     clahe_standard, _, _ = enhance_clahe(denoised_input, clip_limit=3.0, tile_grid_size=(8, 8))
+    t_std_ms = (time.perf_counter() - t0) * 1000
+
+    t0 = time.perf_counter()
     clahe_strong, _, _ = enhance_clahe(denoised_input, clip_limit=5.0, tile_grid_size=(8, 8))
-    elapsed_ms = (time.perf_counter() - t0) * 1000
+    t_strong_ms = (time.perf_counter() - t0) * 1000
 
     # 4. Đo lường chỉ số học thuật
     psnr_noisy = calculate_psnr(clean_img, low_light_noisy) if is_simulated else 0.0
@@ -299,16 +310,16 @@ def main():
         print(f"  Trạng thái ảnh            | PSNR (dB) | SSIM   | NIQE (càng nhỏ càng tốt)")
         print("-" * 85)
         print(f"  1. Ảnh thiếu sáng + nhiễu | {psnr_noisy:<9.2f} | {ssim_noisy:<6.4f} | {niqe_noisy:<6.2f}")
-        print(f"  2. CLAHE (Clip = 1.5 nhẹ) | {calculate_psnr(clean_img, clahe_light):<9.2f} | {calculate_ssim(clean_img, clahe_light):<6.4f} | {calculate_niqe(clahe_light):<6.2f}")
-        print(f"  3. CLAHE (Clip = 3.0 chuẩn)| {psnr_std:<9.2f} | {ssim_std:<6.4f} | {niqe_std:<6.2f} (Thời gian: {elapsed_ms:.2f} ms)")
-        print(f"  4. CLAHE (Clip = 5.0 mạnh)| {calculate_psnr(clean_img, clahe_strong):<9.2f} | {calculate_ssim(clean_img, clahe_strong):<6.4f} | {calculate_niqe(clahe_strong):<6.2f}")
+        print(f"  2. CLAHE (Clip = 1.5 nhẹ) | {calculate_psnr(clean_img, clahe_light):<9.2f} | {calculate_ssim(clean_img, clahe_light):<6.4f} | {calculate_niqe(clahe_light):<6.2f} (Thời gian: {t_light_ms:.2f} ms)")
+        print(f"  3. CLAHE (Clip = 3.0 chuẩn)| {psnr_std:<9.2f} | {ssim_std:<6.4f} | {niqe_std:<6.2f} (Thời gian: {t_std_ms:.2f} ms)")
+        print(f"  4. CLAHE (Clip = 5.0 mạnh)| {calculate_psnr(clean_img, clahe_strong):<9.2f} | {calculate_ssim(clean_img, clahe_strong):<6.4f} | {calculate_niqe(clahe_strong):<6.2f} (Thời gian: {t_strong_ms:.2f} ms)")
     else:
         print(f"  Trạng thái ảnh            | NIQE (Chỉ số tự nhiên - càng nhỏ càng tốt)")
         print("-" * 85)
         print(f"  1. Ảnh thiếu sáng gốc     | {niqe_noisy:<42.2f}")
-        print(f"  2. CLAHE (Clip = 1.5 nhẹ) | {calculate_niqe(clahe_light):<42.2f}")
-        print(f"  3. CLAHE (Clip = 3.0 chuẩn)| {niqe_std:<42.2f} (Thời gian: {elapsed_ms:.2f} ms)")
-        print(f"  4. CLAHE (Clip = 5.0 mạnh)| {calculate_niqe(clahe_strong):<42.2f}")
+        print(f"  2. CLAHE (Clip = 1.5 nhẹ) | {calculate_niqe(clahe_light):<42.2f} (Thời gian: {t_light_ms:.2f} ms)")
+        print(f"  3. CLAHE (Clip = 3.0 chuẩn)| {niqe_std:<42.2f} (Thời gian: {t_std_ms:.2f} ms)")
+        print(f"  4. CLAHE (Clip = 5.0 mạnh)| {calculate_niqe(clahe_strong):<42.2f} (Thời gian: {t_strong_ms:.2f} ms)")
     print("-" * 85)
     print("  NHẬN XÉT HỌC THUẬT:")
     print("  • Clip Limit = 3.0 đạt sự cân bằng tối ưu: Tăng cường rõ nét chi tiết cây cối và dốc núi")

@@ -54,17 +54,18 @@ class ImageEnhancementComparisonPipeline:
     def process_comparison(
         self,
         image_input: Any,
-        simulate_low_light: bool = True,
+        simulate_low_light: Optional[bool] = None,
         brightness_factor: Optional[float] = None,
         gamma_darkening: Optional[float] = None,
-        noise_type: str = "gaussian",
+        noise_type: Optional[str] = None,
         noise_params: Optional[Dict[str, Any]] = None,
-        denoise_method: str = "bilateral",
+        denoise_method: Optional[str] = None,
         denoise_params: Optional[Dict[str, Any]] = None,
-        clahe_clip_limit: float = 3.0,
-        clahe_grid_size: Tuple[int, int] = (8, 8),
-        gamma_val: float = 0.5,
-        color_space: str = "HSV"
+        clahe_clip_limit: Optional[float] = None,
+        clahe_grid_size: Optional[Tuple[int, int]] = None,
+        gamma_val: Optional[float] = None,
+        color_space: Optional[str] = None,
+        noise_seed: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Thực thi quy trình so sánh toàn diện 4 phương pháp trên cùng một ảnh đầu vào:
@@ -73,9 +74,40 @@ class ImageEnhancementComparisonPipeline:
         3. Khử nhiễu tiền xử lý (Pre-denoising).
         4. Chạy đồng thời 4 thuật toán nâng cao chất lượng (HE, CLAHE, Gamma, MSR).
         5. Đo lường định lượng toàn bộ chỉ số PSNR, SSIM, NIQE và thời gian chạy.
-        6. Trích xuất biểu đồ phân phối Histogram trước & sau của cả 4 phương pháp.
-        7. Xếp hạng hiệu năng và đưa ra đánh giá tổng quát.
+        6. Trích xuất biểu đồ phân phối Histogram & Difference Heatmap trên kênh độ sáng.
+        7. Xếp hạng hiệu năng đa tiêu chí công bằng cho cả 4 thuật toán.
         """
+        # Đọc tham số mặc định từ config/config.yaml nếu không truyền tường minh
+        sim_ll = self.config.low_light_enabled if simulate_low_light is None else bool(simulate_low_light)
+        bf = self.config.low_light_brightness if brightness_factor is None else float(brightness_factor)
+        gd = self.config.low_light_gamma if gamma_darkening is None else float(gamma_darkening)
+        n_type = self.config.noise_default_type if noise_type is None else noise_type
+        n_params = dict(noise_params) if noise_params is not None else {
+            "sigma": self.config.noise_gaussian_sigma,
+            "amount": self.config.noise_sp_amount,
+            "var": self.config.noise_speckle_var,
+        }
+        d_method = self.config.denoise_default_method if denoise_method is None else denoise_method
+        if denoise_params is None:
+            dm_low = str(d_method).lower().strip()
+            if dm_low in ("nlm", "non_local_means", "fast_nlm"):
+                d_params = self.config.denoise_nlm
+            elif dm_low in ("median", "med"):
+                d_params = self.config.denoise_median
+            else:
+                d_params = self.config.denoise_bilateral
+        else:
+            d_params = dict(denoise_params)
+
+        c_limit = self.config.clahe_clip_limit if clahe_clip_limit is None else float(clahe_clip_limit)
+        c_grid = tuple(self.config.clahe_tile_grid_size) if clahe_grid_size is None else tuple(clahe_grid_size)
+        g_val = self.config.gamma_default if gamma_val is None else float(gamma_val)
+        c_space = self.config.color_space if color_space is None else color_space
+        he_adaptive = (self.config.he_type.lower() == "adaptive")
+        msr_scales = self.config.retinex_scales
+        msr_weights = self.config.retinex_weights
+        msr_clip = self.config.retinex_dynamic_clipping
+
         # 1. Nạp ảnh gốc
         clean_img, filename = self.data_loader.load_image(image_input)
 
@@ -83,33 +115,29 @@ class ImageEnhancementComparisonPipeline:
             isinstance(image_input, np.ndarray) or
             (isinstance(image_input, (str, Path)) and ("temp_web_upload" in str(image_input) or "custom_input" in str(image_input)))
         )
-        clean_gt = clean_img if (not is_real_upload or simulate_low_light) else None
+        clean_gt = clean_img if (not is_real_upload or sim_ll) else None
 
         # 2. Tạo ảnh suy thoái: Thiếu sáng + Nhiễu
         if is_real_upload:
-            if simulate_low_light:
-                bf = brightness_factor if brightness_factor is not None else self.config.low_light_brightness
-                gd = gamma_darkening if gamma_darkening is not None else self.config.low_light_gamma
+            if sim_ll:
                 dark_img = self.data_loader.simulate_low_light(clean_img, bf, gd)
-                degraded_img = self.data_loader.apply_noise(dark_img, noise_type, noise_params)
+                degraded_img = self.data_loader.apply_noise(dark_img, n_type, n_params, seed=noise_seed)
             else:
-                # Ảnh thực tế người dùng tải lên đã là ảnh chụp thiếu sáng sẵn
+                # Giao thức 2: Ảnh thực tế người dùng tải lên đã thiếu sáng sẵn -> giữ nguyên
                 degraded_img = clean_img.copy()
         else:
-            # Ảnh từ dataset: mô phỏng thiếu sáng và bơm nhiễu
-            bf = brightness_factor if brightness_factor is not None else self.config.low_light_brightness
-            gd = gamma_darkening if gamma_darkening is not None else self.config.low_light_gamma
-            if simulate_low_light:
+            # Giao thức 1: Ảnh từ dataset -> mô phỏng thiếu sáng và bơm nhiễu
+            if sim_ll:
                 dark_img = self.data_loader.simulate_low_light(clean_img, bf, gd)
             else:
                 dark_img = clean_img.copy()
-            degraded_img = self.data_loader.apply_noise(dark_img, noise_type, noise_params)
+            degraded_img = self.data_loader.apply_noise(dark_img, n_type, n_params, seed=noise_seed)
 
         # 3. Lọc khử nhiễu tiền xử lý
-        denoised_input = EnhancementModules.apply_pre_denoising(degraded_img, denoise_method, denoise_params)
+        denoised_input = EnhancementModules.apply_pre_denoising(degraded_img, d_method, d_params)
 
         # Trích xuất biểu đồ độ sáng của ảnh đầu vào suy thoái
-        if color_space.upper() == "LAB":
+        if c_space.upper() == "LAB":
             input_lum = cv2.split(cv2.cvtColor(denoised_input, cv2.COLOR_BGR2LAB))[0]
         else:
             input_lum = cv2.split(cv2.cvtColor(denoised_input, cv2.COLOR_BGR2HSV))[2]
@@ -121,12 +149,12 @@ class ImageEnhancementComparisonPipeline:
         # --- Method 1: Histogram Equalization (HE) ---
         t0 = time.perf_counter()
         he_img, _, he_lum = EnhancementModules.apply_histogram_equalization(
-            denoised_input, color_space=color_space, adaptive=False
+            denoised_input, color_space=c_space, adaptive=he_adaptive
         )
         t_he = round((time.perf_counter() - t0) * 1000, 2)
         m_he = ImageQualityMetrics.evaluate_method(clean_gt, degraded_img, he_img)
         hist_he = EnhancementModules.extract_histogram(he_lum)
-        diff_he = EnhancementModules.compute_difference_map(degraded_img, he_img)
+        diff_he = EnhancementModules.compute_difference_map(degraded_img, he_img, color_space=c_space)
 
         methods_data["he"] = {
             "name": "Histogram Equalization (HE)",
@@ -144,12 +172,12 @@ class ImageEnhancementComparisonPipeline:
         # --- Method 2: CLAHE ---
         t0 = time.perf_counter()
         clahe_img, _, clahe_lum = EnhancementModules.apply_clahe(
-            denoised_input, clip_limit=clahe_clip_limit, tile_grid_size=clahe_grid_size, color_space=color_space
+            denoised_input, clip_limit=c_limit, tile_grid_size=c_grid, color_space=c_space
         )
         t_clahe = round((time.perf_counter() - t0) * 1000, 2)
         m_clahe = ImageQualityMetrics.evaluate_method(clean_gt, degraded_img, clahe_img)
         hist_clahe = EnhancementModules.extract_histogram(clahe_lum)
-        diff_clahe = EnhancementModules.compute_difference_map(degraded_img, clahe_img)
+        diff_clahe = EnhancementModules.compute_difference_map(degraded_img, clahe_img, color_space=c_space)
 
         methods_data["clahe"] = {
             "name": "Contrast Limited Adaptive HE (CLAHE)",
@@ -167,12 +195,15 @@ class ImageEnhancementComparisonPipeline:
         # --- Method 3: Gamma Correction ---
         t0 = time.perf_counter()
         gamma_img, _, gamma_lum, eff_gamma = EnhancementModules.apply_gamma_correction(
-            denoised_input, gamma=gamma_val, auto_optimize=False, color_space=color_space
+            denoised_input,
+            gamma=g_val,
+            auto_optimize=self.config.gamma_auto_optimize,
+            color_space=c_space,
         )
         t_gamma = round((time.perf_counter() - t0) * 1000, 2)
         m_gamma = ImageQualityMetrics.evaluate_method(clean_gt, degraded_img, gamma_img)
         hist_gamma = EnhancementModules.extract_histogram(gamma_lum)
-        diff_gamma = EnhancementModules.compute_difference_map(degraded_img, gamma_img)
+        diff_gamma = EnhancementModules.compute_difference_map(degraded_img, gamma_img, color_space=c_space)
 
         methods_data["gamma"] = {
             "name": f"Gamma Correction (γ = {eff_gamma:.2f})",
@@ -190,12 +221,16 @@ class ImageEnhancementComparisonPipeline:
         # --- Method 4: Multi-Scale Retinex (MSR) ---
         t0 = time.perf_counter()
         msr_img, _, msr_lum = EnhancementModules.apply_multi_scale_retinex(
-            denoised_input, scales=[15, 80, 250], color_space=color_space
+            denoised_input,
+            scales=msr_scales,
+            weights=msr_weights,
+            dynamic_clip_percentile=msr_clip,
+            color_space=c_space,
         )
         t_msr = round((time.perf_counter() - t0) * 1000, 2)
         m_msr = ImageQualityMetrics.evaluate_method(clean_gt, degraded_img, msr_img)
         hist_msr = EnhancementModules.extract_histogram(msr_lum)
-        diff_msr = EnhancementModules.compute_difference_map(degraded_img, msr_img)
+        diff_msr = EnhancementModules.compute_difference_map(degraded_img, msr_img, color_space=c_space)
 
         methods_data["msr"] = {
             "name": "Multi-Scale Retinex (MSR)",
@@ -223,13 +258,15 @@ class ImageEnhancementComparisonPipeline:
             "methods": methods_data,
             "rankings": rankings,
             "hyperparams": {
-                "simulate_low_light": simulate_low_light,
-                "noise_type": noise_type,
-                "denoise_method": denoise_method,
-                "clahe_clip_limit": clahe_clip_limit,
-                "clahe_grid_size": list(clahe_grid_size),
-                "gamma_val": gamma_val,
-                "color_space": color_space
+                "simulate_low_light": sim_ll,
+                "brightness_factor": bf,
+                "gamma_darkening": gd,
+                "noise_type": n_type,
+                "denoise_method": d_method,
+                "clahe_clip_limit": c_limit,
+                "clahe_grid_size": list(c_grid),
+                "gamma_val": g_val,
+                "color_space": c_space
             }
         }
 
@@ -239,32 +276,55 @@ class ImageEnhancementComparisonPipeline:
 
     @staticmethod
     def _compute_rankings(methods: Dict[str, Any], ground_truth_available: bool) -> Dict[str, Any]:
-        """Xác định phương pháp tốt nhất theo từng tiêu chí học thuật."""
+        """Xác định phương pháp tốt nhất theo từng tiêu chí học thuật và điểm tổng hợp công bằng cho cả 4 thuật toán."""
         names = list(methods.keys())
 
-        # Tiêu chí NIQE (càng nhỏ càng tốt, an toàn với None/NaN)
         def _get_niqe(k):
             val = methods[k]["metrics"].get("niqe")
-            return val if (val is not None and not np.isnan(val)) else 999.0
+            return float(val) if (val is not None and not np.isnan(val)) else 999.0
+
+        def _get_time(k):
+            val = methods[k].get("exec_time_ms")
+            return float(val) if (val is not None and not np.isnan(val)) else 9999.0
+
+        def _norm_min_max(val_dict: Dict[str, float], invert: bool = False) -> Dict[str, float]:
+            vals = list(val_dict.values())
+            lo, hi = min(vals), max(vals)
+            if abs(hi - lo) < 1e-9:
+                return {k: 1.0 for k in val_dict}
+            return {
+                k: ((hi - v) / (hi - lo) if invert else (v - lo) / (hi - lo))
+                for k, v in val_dict.items()
+            }
 
         best_niqe_key = min(names, key=_get_niqe)
+        best_speed_key = min(names, key=_get_time)
 
-        rankings = {
+        rankings: Dict[str, Any] = {
             "best_niqe": {
                 "key": best_niqe_key,
                 "name": methods[best_niqe_key]["name"],
                 "value": methods[best_niqe_key]["metrics"]["niqe"]
+            },
+            "best_speed": {
+                "key": best_speed_key,
+                "name": methods[best_speed_key]["name"],
+                "value": methods[best_speed_key]["exec_time_ms"]
             }
         }
+
+        niqe_scores = _norm_min_max({k: _get_niqe(k) for k in names}, invert=True)
+        # Dùng log(1 + ms) để đánh giá công bằng giữa thuật toán thời gian thực (~5ms) và ngoại tuyến (~2000ms)
+        speed_scores = _norm_min_max({k: float(np.log1p(_get_time(k))) for k in names}, invert=True)
 
         if ground_truth_available:
             def _get_psnr(k):
                 val = methods[k]["metrics"].get("psnr")
-                return val if (val is not None and not np.isnan(val)) else -999.0
+                return float(val) if (val is not None and not np.isnan(val)) else -999.0
 
             def _get_ssim(k):
                 val = methods[k]["metrics"].get("ssim")
-                return val if (val is not None and not np.isnan(val)) else -999.0
+                return float(val) if (val is not None and not np.isnan(val)) else -999.0
 
             best_psnr_key = max(names, key=_get_psnr)
             best_ssim_key = max(names, key=_get_ssim)
@@ -280,18 +340,38 @@ class ImageEnhancementComparisonPipeline:
                 "value": methods[best_ssim_key]["metrics"]["ssim"]
             }
 
-            clahe_ssim = _get_ssim("clahe")
-            msr_ssim = _get_ssim("msr")
-            recommended_key = "clahe" if clahe_ssim >= msr_ssim else "msr"
+            psnr_scores = _norm_min_max({k: _get_psnr(k) for k in names}, invert=False)
+            ssim_scores = _norm_min_max({k: _get_ssim(k) for k in names}, invert=False)
+
+            # Điểm tổng hợp đa tiêu chí công bằng trên cả 4 thuật toán:
+            # 35% SSIM + 35% NIQE + 15% PSNR + 15% Speed
+            composite = {
+                k: round(
+                    0.35 * ssim_scores[k]
+                    + 0.35 * niqe_scores[k]
+                    + 0.15 * psnr_scores[k]
+                    + 0.15 * speed_scores[k],
+                    4,
+                )
+                for k in names
+            }
+            recommended_key = max(names, key=lambda k: composite[k])
+            rankings["composite_scores"] = composite
         else:
             rankings["best_psnr"] = None
             rankings["best_ssim"] = None
-            recommended_key = best_niqe_key
+            # Không có Ground Truth: 75% độ tự nhiên NIQE + 25% tốc độ
+            composite = {
+                k: round(0.75 * niqe_scores[k] + 0.25 * speed_scores[k], 4)
+                for k in names
+            }
+            recommended_key = max(names, key=lambda k: composite[k])
+            rankings["composite_scores"] = composite
 
         rankings["overall_recommended"] = {
             "key": recommended_key,
             "name": methods[recommended_key]["name"],
-            "reason": "Đạt sự cân bằng tối ưu giữa bảo toàn chi tiết cấu trúc (SSIM) và độ tự nhiên của cảnh quan (NIQE)."
+            "reason": "Đạt điểm tổng hợp đa tiêu chí cao nhất (cân bằng giữa SSIM, độ tự nhiên NIQE, PSNR và thời gian thực thi)."
         }
 
         return rankings
@@ -301,12 +381,14 @@ class ImageEnhancementComparisonPipeline:
     # -------------------------------------------------------------------------
     def run_batch_benchmark(
         self,
-        num_samples: int = 25,
-        output_csv_path: Optional[str] = None
+        num_samples: int = 50,
+        output_csv_path: Optional[str] = None,
+        base_seed: int = 42,
     ) -> Dict[str, Any]:
         """
-        Chạy kiểm thử đánh giá diện rộng trên tập ảnh phong cảnh ngoại cảnh,
-        ghi nhận toàn bộ thông số PSNR, SSIM, NIQE của cả 4 thuật toán ra file CSV.
+        Chạy kiểm thử đánh giá diện rộng tuần tự trên tập ảnh phong cảnh ngoại cảnh,
+        cố định random seed (base_seed + i) để đảm bảo tái lập 100%,
+        ghi nhận toàn bộ thông số PSNR, SSIM, NIQE và thời gian chạy ra file CSV.
         """
         if output_csv_path is None:
             output_csv_path = str(PROJECT_ROOT / "outputs" / "benchmark_results.csv")
@@ -316,10 +398,11 @@ class ImageEnhancementComparisonPipeline:
 
         records = []
         summary_stats = {
-            "he": {"psnr": [], "ssim": [], "niqe": []},
-            "clahe": {"psnr": [], "ssim": [], "niqe": []},
-            "gamma": {"psnr": [], "ssim": [], "niqe": []},
-            "msr": {"psnr": [], "ssim": [], "niqe": []}
+            "input_degraded": {"psnr": [], "ssim": [], "niqe": [], "time": []},
+            "he": {"psnr": [], "ssim": [], "niqe": [], "time": []},
+            "clahe": {"psnr": [], "ssim": [], "niqe": [], "time": []},
+            "gamma": {"psnr": [], "ssim": [], "niqe": [], "time": []},
+            "msr": {"psnr": [], "ssim": [], "niqe": [], "time": []},
         }
 
         t_start = time.time()
@@ -327,10 +410,29 @@ class ImageEnhancementComparisonPipeline:
             res = self.process_comparison(
                 image_input=i,
                 simulate_low_light=True,
-                noise_type="gaussian",
-                denoise_method="bilateral"
+                noise_seed=base_seed + i,
             )
             fn = res["filename"]
+
+            # Ghi nhận hàng mốc đầu vào suy thoái (Input_Degraded)
+            base_m = res["methods"]["he"]["metrics"]
+            records.append({
+                "Image": fn,
+                "Method": "Input_Degraded",
+                "PSNR(dB)": base_m["psnr_before"],
+                "Delta_PSNR": 0.0,
+                "SSIM": base_m["ssim_before"],
+                "Delta_SSIM": 0.0,
+                "NIQE": base_m["niqe_before"],
+                "Delta_NIQE": 0.0,
+                "Time(ms)": 0.0,
+            })
+            if base_m["psnr_before"] is not None:
+                summary_stats["input_degraded"]["psnr"].append(base_m["psnr_before"])
+                summary_stats["input_degraded"]["ssim"].append(base_m["ssim_before"])
+            summary_stats["input_degraded"]["niqe"].append(base_m["niqe_before"])
+            summary_stats["input_degraded"]["time"].append(0.0)
+
             for m_key, m_info in res["methods"].items():
                 m = m_info["metrics"]
                 records.append({
@@ -348,6 +450,7 @@ class ImageEnhancementComparisonPipeline:
                     summary_stats[m_key]["psnr"].append(m["psnr"])
                     summary_stats[m_key]["ssim"].append(m["ssim"])
                 summary_stats[m_key]["niqe"].append(m["niqe"])
+                summary_stats[m_key]["time"].append(m_info["exec_time_ms"])
 
         # Lưu file CSV
         Path(output_csv_path).parent.mkdir(parents=True, exist_ok=True)
@@ -363,7 +466,8 @@ class ImageEnhancementComparisonPipeline:
             averages[m_key] = {
                 "avg_psnr": round(float(np.mean(vals["psnr"])), 2) if vals["psnr"] else 0.0,
                 "avg_ssim": round(float(np.mean(vals["ssim"])), 4) if vals["ssim"] else 0.0,
-                "avg_niqe": round(float(np.mean(vals["niqe"])), 2) if vals["niqe"] else 0.0
+                "avg_niqe": round(float(np.mean(vals["niqe"])), 2) if vals["niqe"] else 0.0,
+                "avg_time_ms": round(float(np.mean(vals["time"])), 2) if vals["time"] else 0.0,
             }
 
         cleanup_memory()
@@ -373,5 +477,5 @@ class ImageEnhancementComparisonPipeline:
             "elapsed_seconds": round(time.time() - t_start, 2),
             "output_csv": output_csv_path,
             "averages": averages,
-            "records_sample": records[:20]
+            "records_sample": records[:25]
         }

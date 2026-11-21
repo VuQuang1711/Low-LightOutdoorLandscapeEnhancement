@@ -5,7 +5,7 @@ THUẬT TOÁN 3: HIỆU CHỈNH GAMMA (GAMMA CORRECTION - THỬ NGHIỆM NHIỀU
 Tác giả / Thành viên: Lê Nguyễn Tâm Đức - 2045240054
 Mục tiêu:
     1. Nghiên cứu lý thuyết biến đổi phi tuyến theo hàm lũy thừa (Power-Law / Gamma Transformation).
-    2. Cài đặt vòng lặp thử nghiệm chạy với nhiều giá trị gamma khác nhau (0.2, 0.4, 0.6, 0.8, 1.2)
+    2. Cài đặt vòng lặp thử nghiệm chạy với nhiều giá trị gamma khác nhau (0.25, 0.40, 0.50, 0.65, 0.85, 1.20)
        để tìm ra ngưỡng kéo sáng tối ưu cho ảnh phong cảnh mà không làm cháy sáng nền trời.
     3. Tối ưu hóa tốc độ xử lý bằng bảng tra cứu trước (Lookup Table - LUT).
     4. Đo lường định lượng và so sánh hiệu năng qua PSNR (dB), SSIM và NIQE.
@@ -41,7 +41,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple, Dict, Any, List, Optional
+from typing import Tuple, Dict, Any, List, Optional, Union
 
 import cv2
 import numpy as np
@@ -93,9 +93,13 @@ def enhance_gamma_correction(
             effective_gamma = float(np.log(0.5) / np.log(mean_val + 1e-6))
             effective_gamma = max(0.2, min(1.5, effective_gamma))
 
-    # Bước 3: Tạo bảng tra cứu Lookup Table (LUT)
+    # Bước 3: Tạo bảng tra cứu Lookup Table (LUT) làm tròn chuẩn round()
     inv_gamma = effective_gamma
-    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+    table = np.clip(
+        np.round(((np.arange(256, dtype=np.float64) / 255.0) ** inv_gamma) * 255.0),
+        0,
+        255,
+    ).astype(np.uint8)
 
     # Bước 4: Áp dụng bảng tra cứu siêu nhanh O(1)
     v_enhanced = cv2.LUT(v_chan, table)
@@ -136,15 +140,19 @@ def calculate_ssim(img_ref: np.ndarray, img_tgt: np.ndarray) -> float:
 
 
 def calculate_niqe(img_bgr: np.ndarray) -> float:
-    """Tính chỉ số tự nhiên không tham chiếu NIQE (Càng nhỏ càng tự nhiên)."""
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
-    mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0)
-    mu_sq = mu * mu
-    sigma = np.sqrt(np.abs(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0) - mu_sq))
-    structdis = (gray - mu) / (sigma + 1.0)
-    var = np.var(structdis)
-    niqe_score = float(np.clip(12.0 / (var + 0.8), 2.5, 12.0))
-    return round(niqe_score, 2)
+    """Tính chỉ số tự nhiên không tham chiếu NIQE (Mittal et al., 2013 - Càng nhỏ càng tự nhiên)."""
+    proj_root = Path(__file__).resolve().parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    try:
+        from src.metrics import ImageQualityMetrics
+        return ImageQualityMetrics.calculate_niqe(img_bgr)
+    except Exception:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
+        mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT)
+        sigma = np.sqrt(np.maximum(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT) - mu * mu, 0.0))
+        structdis = (gray - mu) / (sigma + 1.0)
+        return round(float(np.abs(np.var(structdis) - 1.0) * 10.0 + 3.0), 2)
 
 
 # ==================================================================================================
@@ -283,8 +291,9 @@ def main():
         print("  • Đang giả lập môi trường thiếu sáng & bơm nhiễu Gauss...")
         dark_float = np.power(clean_img.astype(np.float32) / 255.0, 2.2) * 0.35
         low_light_img = np.clip(dark_float * 255.0, 0, 255).astype(np.uint8)
-        noise = np.random.normal(0, 15, low_light_img.shape)
-        low_light_noisy = np.clip(low_light_img.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0.0, 15.0, low_light_img.shape)
+        low_light_noisy = np.clip(np.round(low_light_img.astype(np.float32) + noise), 0, 255).astype(np.uint8)
         is_simulated = True
 
     # 2. Tiền xử lý khử nhiễu

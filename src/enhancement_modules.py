@@ -208,9 +208,13 @@ class EnhancementModules:
                     effective_gamma = float(np.log(0.5) / np.log(mean_val + 1e-6))
                     effective_gamma = max(0.2, min(1.5, effective_gamma))
 
-            # Bảng tra Lookup Table (LUT) để tối ưu tốc độ tính toán
+            # Bảng tra Lookup Table (LUT) với làm tròn chuẩn round() để tối ưu tốc độ và độ chính xác
             inv_gamma = effective_gamma
-            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+            table = np.clip(
+                np.round(((np.arange(256, dtype=np.float64) / 255.0) ** inv_gamma) * 255.0),
+                0,
+                255,
+            ).astype(np.uint8)
             return cv2.LUT(lum_chan, table)
 
         res_bgr, orig_lum, enh_lum = cls.luminance_wrapper(
@@ -283,18 +287,28 @@ class EnhancementModules:
         return hist.astype(int).tolist()
 
     @staticmethod
-    def compute_difference_map(img1_bgr: np.ndarray, img2_bgr: np.ndarray) -> np.ndarray:
+    def compute_difference_map(
+        img1_bgr: np.ndarray,
+        img2_bgr: np.ndarray,
+        color_space: str = "HSV"
+    ) -> np.ndarray:
         """
         Tính bản đồ nhiệt độ lệch (Difference Heatmap) trực quan hóa mức độ
-        kéo sáng và khôi phục chi tiết giữa ảnh trước và sau xử lý.
+        kéo sáng và khôi phục chi tiết trên kênh độ sáng (V của HSV hoặc L của LAB):
+        Delta(x, y) = |V_enhanced(x, y) - V_input(x, y)|
         """
-        g1 = cv2.cvtColor(img1_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        g2 = cv2.cvtColor(img2_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        cs = color_space.upper().strip()
+        if cs == "LAB":
+            l1 = cv2.split(cv2.cvtColor(img1_bgr, cv2.COLOR_BGR2LAB))[0].astype(np.float32)
+            l2 = cv2.split(cv2.cvtColor(img2_bgr, cv2.COLOR_BGR2LAB))[0].astype(np.float32)
+        else:
+            l1 = cv2.split(cv2.cvtColor(img1_bgr, cv2.COLOR_BGR2HSV))[2].astype(np.float32)
+            l2 = cv2.split(cv2.cvtColor(img2_bgr, cv2.COLOR_BGR2HSV))[2].astype(np.float32)
 
-        # Lấy giá trị tuyệt đối độ lệch sáng
-        diff = np.abs(g2 - g1)
-        diff_norm = np.clip((diff / 255.0) * 255.0, 0, 255).astype(np.uint8)
+        # Lấy giá trị tuyệt đối độ lệch sáng trên kênh độ chói
+        diff = np.abs(l2 - l1)
+        diff_norm = np.clip(np.round(diff), 0, 255).astype(np.uint8)
 
-        # Áp dụng bảng màu nhiệt COLORMAP_JET hoặc COLORMAP_INFERNO
+        # Áp dụng bảng màu nhiệt COLORMAP_JET
         heatmap = cv2.applyColorMap(diff_norm, cv2.COLORMAP_JET)
         return heatmap

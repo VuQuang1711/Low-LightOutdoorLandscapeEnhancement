@@ -23,8 +23,5 @@ Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
 
-.venv/
-__pycache__/
-*.py[cod]
-outputs/*.csv
+# Generated temporary outputs
 outputs/temp_web_upload.png

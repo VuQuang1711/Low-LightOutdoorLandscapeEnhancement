@@ -109,20 +109,19 @@ class DataLoader:
             filename = "synthetic_landscape.png"
             img = self._generate_synthetic_landscape()
 
-
-        # Edge Case 2: Chuẩn hóa số kênh về 3 kênh BGR
-        if len(img.shape) == 2:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-        elif img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
-        # Edge Case 3: Resize nếu vượt quá target_max_size để tăng tốc xử lý và tránh tràn RAM
+        # Edge Case 2: Resize nếu vượt quá target_max_size để tăng tốc xử lý và tránh tràn RAM
         h, w = img.shape[:2]
         if max(h, w) > target_max_size:
             scale = target_max_size / max(h, w)
             new_w = max(1, int(w * scale))
             new_h = max(1, int(h * scale))
             img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        # Edge Case 3: Chuẩn hóa số kênh về 3 kênh BGR
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
         return img, filename
 
@@ -158,20 +157,21 @@ class DataLoader:
     ) -> np.ndarray:
         """
         Mô phỏng ảnh chụp phong cảnh trong điều kiện thiếu sáng ban đêm:
-        1. Giảm cường độ sáng tuyến tính theo tỷ lệ brightness_factor (0.1 - 0.6).
-        2. Nén phi tuyến theo hàm Gamma tối: I_dark = I^gamma (gamma > 1) để các vùng bóng râm
-           và bầu trời đêm chìm sâu vào dải tối như cảm biến ISO thấp.
+        I_dark = clip(255 * brightness_factor * (I / 255)^gamma_darkening, 0, 255)
+        1. Nén phi tuyến theo hàm Gamma tối (gamma_darkening > 1) để các vùng bóng râm
+           chìm sâu vào dải tối như đặc tính cảm biến trong điều kiện ánh sáng yếu.
+        2. Nhân hệ số suy giảm độ chói tuyến tính brightness_factor (0.1 - 0.8).
         """
         img_float = img_bgr.astype(np.float32) / 255.0
 
-        # Áp dụng gamma darkening phi tuyến
+        # Bước 1: Áp dụng nén gamma phi tuyến
         darkened = np.power(img_float, gamma_darkening)
 
-        # Scale thêm hệ số độ chói
+        # Bước 2: Nhân hệ số suy giảm độ chói tuyến tính
         darkened = darkened * brightness_factor
 
         # Đưa về [0, 255] uint8
-        res = np.clip(darkened * 255.0, 0, 255).astype(np.uint8)
+        res = np.clip(np.round(darkened * 255.0), 0, 255).astype(np.uint8)
         return res
 
     # -------------------------------------------------------------------------
@@ -181,7 +181,8 @@ class DataLoader:
     def apply_noise(
         img_bgr: np.ndarray,
         noise_type: str = "gaussian",
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
+        seed: Optional[int] = None
     ) -> np.ndarray:
         """
         Bơm nhiễu nhân tạo vào ảnh để kiểm thử năng lực khử nhiễu của thuật toán:
@@ -189,18 +190,20 @@ class DataLoader:
         - Salt & Pepper: Nhiễu xung cực đại (255) và cực tiểu (0).
         - Poisson: Nhiễu lượng tử ánh sáng (Photon shot noise - đặc trưng thiếu sáng).
         - Speckle: Nhiễu nhân dạng đốm I * (1 + N(0, var)).
+        Hỗ trợ tham số `seed` cố định để đảm bảo khả năng tái lập kết quả thực nghiệm.
         """
         params = params or {}
         n_type = str(noise_type).lower().strip()
+        rng = np.random.default_rng(seed)
 
         if n_type in ("none", "clean"):
             return img_bgr.copy()
 
         elif n_type in ("gaussian", "gauss"):
             sigma = float(params.get("sigma", 15.0))
-            noise = np.random.normal(0, sigma, img_bgr.shape)
+            noise = rng.normal(0.0, sigma, img_bgr.shape)
             noisy = img_bgr.astype(np.float32) + noise
-            return np.clip(noisy, 0, 255).astype(np.uint8)
+            return np.clip(np.round(noisy), 0, 255).astype(np.uint8)
 
         elif n_type in ("salt_and_pepper", "sp", "salt_pepper"):
             amount = float(params.get("amount", 0.02))
@@ -209,27 +212,34 @@ class DataLoader:
 
             # Salt (255)
             num_salt = int(np.ceil(amount * img_bgr.size * s_vs_p / 3))
-            coords_salt = [np.random.randint(0, i, num_salt) for i in img_bgr.shape[:2]]
-            noisy[tuple(coords_salt)] = 255
+            coords_salt = (
+                rng.integers(0, img_bgr.shape[0], size=num_salt),
+                rng.integers(0, img_bgr.shape[1], size=num_salt),
+            )
+            noisy[coords_salt] = 255
 
             # Pepper (0)
             num_pepper = int(np.ceil(amount * img_bgr.size * (1.0 - s_vs_p) / 3))
-            coords_pepper = [np.random.randint(0, i, num_pepper) for i in img_bgr.shape[:2]]
-            noisy[tuple(coords_pepper)] = 0
+            coords_pepper = (
+                rng.integers(0, img_bgr.shape[0], size=num_pepper),
+                rng.integers(0, img_bgr.shape[1], size=num_pepper),
+            )
+            noisy[coords_pepper] = 0
             return noisy
 
         elif n_type in ("poisson", "shot"):
             # Poisson Noise (Photon noise)
             vals = len(np.unique(img_bgr))
             vals = 2 ** np.ceil(np.log2(vals)) if vals > 0 else 256
-            noisy = np.random.poisson(img_bgr.astype(np.float32) * vals / 255.0) / (vals / 255.0)
-            return np.clip(noisy, 0, 255).astype(np.uint8)
+            lam = np.maximum(img_bgr.astype(np.float32) * vals / 255.0, 0.0)
+            noisy = rng.poisson(lam) / (vals / 255.0)
+            return np.clip(np.round(noisy), 0, 255).astype(np.uint8)
 
         elif n_type in ("speckle", "multiplicative"):
             var = float(params.get("var", 0.04))
-            noise = np.random.normal(0, np.sqrt(var), img_bgr.shape)
+            noise = rng.normal(0.0, np.sqrt(max(var, 0.0)), img_bgr.shape)
             noisy = img_bgr.astype(np.float32) * (1.0 + noise)
-            return np.clip(noisy, 0, 255).astype(np.uint8)
+            return np.clip(np.round(noisy), 0, 255).astype(np.uint8)
 
         else:
             return img_bgr.copy()

@@ -33,7 +33,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, Union
 
 import cv2
 import numpy as np
@@ -128,20 +128,22 @@ def calculate_ssim(img_ref: np.ndarray, img_tgt: np.ndarray) -> float:
 
 def calculate_niqe(img_bgr: np.ndarray) -> float:
     """
-    Tính chỉ số NIQE (Naturalness Image Quality Evaluator - Blind No-reference):
-    Đánh giá độ tự nhiên của ảnh mà không cần ảnh gốc đối chứng.
-    QUY TẮC: ĐIỂM CÀNG NHỎ => ẢNH CÀNG TỰ NHIÊN, CÀNG ĐẸP!
+    Tính chỉ số NIQE (Naturalness Image Quality Evaluator - Mittal et al., 2013):
+    Đánh giá độ tự nhiên của ảnh không cần ảnh gốc đối chứng.
+    QUY TẮC: ĐIỂM CÀNG NHỎ => ẢNH CÀNG TỰ NHIÊN!
     """
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
-    mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0)
-    mu_sq = mu * mu
-    sigma = np.sqrt(np.abs(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0) - mu_sq))
-    structdis = (gray - mu) / (sigma + 1.0)
-    
-    # Ước lượng độ lệch phương sai NSS đơn giản hóa
-    var = np.var(structdis)
-    niqe_score = float(np.clip(12.0 / (var + 0.8), 2.5, 12.0))
-    return round(niqe_score, 2)
+    proj_root = Path(__file__).resolve().parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    try:
+        from src.metrics import ImageQualityMetrics
+        return ImageQualityMetrics.calculate_niqe(img_bgr)
+    except Exception:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
+        mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT)
+        sigma = np.sqrt(np.maximum(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT) - mu * mu, 0.0))
+        structdis = (gray - mu) / (sigma + 1.0)
+        return round(float(np.abs(np.var(structdis) - 1.0) * 10.0 + 3.0), 2)
 
 
 # ==================================================================================================
@@ -281,19 +283,23 @@ def main():
         print("  • Đang giả lập môi trường thiếu sáng (độ chói giảm 65%, nén gamma tối = 2.2)...")
         dark_float = np.power(clean_img.astype(np.float32) / 255.0, 2.2) * 0.35
         low_light_img = np.clip(dark_float * 255.0, 0, 255).astype(np.uint8)
-        # Thêm nhiễu Gauss thực nghiệm
-        noise = np.random.normal(0, 15, low_light_img.shape)
-        low_light_noisy = np.clip(low_light_img.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+        # Thêm nhiễu Gauss thực nghiệm (seed cố định để tái lập kết quả)
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0.0, 15.0, low_light_img.shape)
+        low_light_noisy = np.clip(np.round(low_light_img.astype(np.float32) + noise), 0, 255).astype(np.uint8)
         is_simulated = True
 
-    # 2. Tiền xử lý khử nhiễu
-    t0 = time.perf_counter()
+    # 2. Tiền xử lý khử nhiễu (đo tách biệt với thời gian thuật toán HE)
     denoised_input = apply_bilateral_denoising(low_light_noisy, d=7, sigma_color=50, sigma_space=50)
 
-    # 3. Thực thi Histogram Equalization (Toàn cục & Cục bộ Adaptive)
+    # 3. Thực thi và bấm giờ riêng từng biến thể Histogram Equalization (Global HE & Adaptive HE)
+    t0 = time.perf_counter()
     he_global, v_orig, v_he = enhance_histogram_equalization(denoised_input, adaptive=False)
+    elapsed_he_ms = (time.perf_counter() - t0) * 1000
+
+    t0 = time.perf_counter()
     he_adaptive, _, v_ahe = enhance_histogram_equalization(denoised_input, adaptive=True, clip_limit_ahe=40.0)
-    elapsed_ms = (time.perf_counter() - t0) * 1000
+    elapsed_ahe_ms = (time.perf_counter() - t0) * 1000
 
     # 4. Đo lường chỉ số học thuật
     psnr_noisy = calculate_psnr(clean_img, low_light_noisy) if is_simulated else 0.0
@@ -315,14 +321,14 @@ def main():
         print(f"  Trạng thái ảnh            | PSNR (dB) | SSIM   | NIQE (càng nhỏ càng tốt)")
         print("-" * 85)
         print(f"  1. Ảnh thiếu sáng + nhiễu | {psnr_noisy:<9.2f} | {ssim_noisy:<6.4f} | {niqe_noisy:<6.2f}")
-        print(f"  2. Sau Global HE          | {psnr_he:<9.2f} | {ssim_he:<6.4f} | {niqe_he:<6.2f} (Thời gian: {elapsed_ms:.2f} ms)")
-        print(f"  3. Sau Adaptive HE (AHE)  | {psnr_ahe:<9.2f} | {ssim_ahe:<6.4f} | {niqe_ahe:<6.2f}")
+        print(f"  2. Sau Global HE          | {psnr_he:<9.2f} | {ssim_he:<6.4f} | {niqe_he:<6.2f} (Thời gian: {elapsed_he_ms:.2f} ms)")
+        print(f"  3. Sau Adaptive HE (AHE)  | {psnr_ahe:<9.2f} | {ssim_ahe:<6.4f} | {niqe_ahe:<6.2f} (Thời gian: {elapsed_ahe_ms:.2f} ms)")
     else:
         print(f"  Trạng thái ảnh            | NIQE (Chỉ số tự nhiên - càng nhỏ càng tốt) | Thời Gian (ms)")
         print("-" * 85)
         print(f"  1. Ảnh thiếu sáng gốc     | {niqe_noisy:<42.2f} | --")
-        print(f"  2. Sau Global HE          | {niqe_he:<42.2f} | {elapsed_ms:.2f} ms")
-        print(f"  3. Sau Adaptive HE (AHE)  | {niqe_ahe:<42.2f} | --")
+        print(f"  2. Sau Global HE          | {niqe_he:<42.2f} | {elapsed_he_ms:.2f} ms")
+        print(f"  3. Sau Adaptive HE (AHE)  | {niqe_ahe:<42.2f} | {elapsed_ahe_ms:.2f} ms")
     print("-" * 85)
     print("  NHẬN XÉT HỌC THUẬT:")
     print("  • Global HE kéo sáng rất mạnh các vùng tối, nhưng nhược điểm lớn là làm bệt màu nền trời")

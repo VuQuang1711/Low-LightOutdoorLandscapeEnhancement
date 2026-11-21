@@ -64,6 +64,7 @@ class ProcessRequest(BaseModel):
     gamma_darkening: float = 2.2
     noise_type: str = "gaussian"
     noise_sigma: float = 15.0
+    noise_var: Optional[float] = None
     denoise_method: str = "bilateral"
     clahe_clip_limit: float = 3.0
     clahe_grid_size: List[int] = [8, 8]
@@ -111,6 +112,13 @@ def process_image(req: ProcessRequest):
             img_input = req.image_idx
 
 
+        # Quy đổi tham số nhiễu đầy đủ cho cả Gaussian, Salt & Pepper và Speckle
+        speckle_var = (
+            req.noise_var
+            if req.noise_var is not None
+            else round((req.noise_sigma / 75.0) ** 2, 4)
+        )
+
         # Chạy Pipeline
         res = pipeline.process_comparison(
             image_input=img_input,
@@ -118,7 +126,11 @@ def process_image(req: ProcessRequest):
             brightness_factor=req.brightness_factor,
             gamma_darkening=req.gamma_darkening,
             noise_type=req.noise_type,
-            noise_params={"sigma": req.noise_sigma, "amount": 0.02},
+            noise_params={
+                "sigma": req.noise_sigma,
+                "amount": config.noise_sp_amount,
+                "var": speckle_var,
+            },
             denoise_method=req.denoise_method,
             clahe_clip_limit=req.clahe_clip_limit,
             clahe_grid_size=(req.clahe_grid_size[0], req.clahe_grid_size[1]),
@@ -161,7 +173,8 @@ def process_image(req: ProcessRequest):
 
 
 @app.post("/api/batch")
-def run_batch(samples: int = Query(20, ge=1, le=100)):
+@app.post("/api/benchmark")
+def run_batch(samples: int = Query(50, ge=1, le=100)):
     """Chạy benchmark hàng loạt trên tập mẫu Dataset và xuất báo cáo CSV trong worker thread."""
     try:
         batch_res = pipeline.run_batch_benchmark(num_samples=samples)

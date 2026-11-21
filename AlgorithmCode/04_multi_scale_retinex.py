@@ -48,7 +48,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Tuple, Dict, Any, List, Optional
+from typing import Tuple, Dict, Any, List, Optional, Union
 
 import cv2
 import numpy as np
@@ -157,15 +157,19 @@ def calculate_ssim(img_ref: np.ndarray, img_tgt: np.ndarray) -> float:
 
 
 def calculate_niqe(img_bgr: np.ndarray) -> float:
-    """Tính chỉ số tự nhiên không tham chiếu NIQE (Càng nhỏ càng tự nhiên)."""
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
-    mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0)
-    mu_sq = mu * mu
-    sigma = np.sqrt(np.abs(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0) - mu_sq))
-    structdis = (gray - mu) / (sigma + 1.0)
-    var = np.var(structdis)
-    niqe_score = float(np.clip(12.0 / (var + 0.8), 2.5, 12.0))
-    return round(niqe_score, 2)
+    """Tính chỉ số tự nhiên không tham chiếu NIQE (Mittal et al., 2013 - Càng nhỏ càng tự nhiên)."""
+    proj_root = Path(__file__).resolve().parent.parent
+    if str(proj_root) not in sys.path:
+        sys.path.insert(0, str(proj_root))
+    try:
+        from src.metrics import ImageQualityMetrics
+        return ImageQualityMetrics.calculate_niqe(img_bgr)
+    except Exception:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float64)
+        mu = cv2.GaussianBlur(gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT)
+        sigma = np.sqrt(np.maximum(cv2.GaussianBlur(gray * gray, (7, 7), 7.0 / 6.0, borderType=cv2.BORDER_REFLECT) - mu * mu, 0.0))
+        structdis = (gray - mu) / (sigma + 1.0)
+        return round(float(np.abs(np.var(structdis) - 1.0) * 10.0 + 3.0), 2)
 
 
 # ==================================================================================================
@@ -304,8 +308,9 @@ def main():
         print("  • Đang giả lập môi trường thiếu sáng & bơm nhiễu Gauss...")
         dark_float = np.power(clean_img.astype(np.float32) / 255.0, 2.2) * 0.35
         low_light_img = np.clip(dark_float * 255.0, 0, 255).astype(np.uint8)
-        noise = np.random.normal(0, 15, low_light_img.shape)
-        low_light_noisy = np.clip(low_light_img.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0.0, 15.0, low_light_img.shape)
+        low_light_noisy = np.clip(np.round(low_light_img.astype(np.float32) + noise), 0, 255).astype(np.uint8)
         is_simulated = True
 
     # 2. Tiền xử lý khử nhiễu

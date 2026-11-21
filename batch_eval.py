@@ -1,8 +1,9 @@
 """
 Batch Execution Pipeline: Offline Dataset Benchmark
 batch_eval.py - Universal XAI & 3-Tier Blueprint
-Runs automated offline comparative benchmarking across random samples from the dataset
-and outputs a detailed CSV report with PSNR, SSIM, and NIQE scores for all 4 algorithms.
+Runs automated offline comparative benchmarking sequentially across samples from the dataset
+(with deterministic random seed for reproducibility) and outputs a detailed CSV report
+with PSNR, SSIM, NIQE, and latency scores for all 4 algorithms.
 
 Usage:
     py batch_eval.py --samples 50 --output outputs/benchmark_results.csv
@@ -29,15 +30,17 @@ from src.config import AppConfig
 
 def main():
     parser = argparse.ArgumentParser(description="Đánh giá diện rộng 4 thuật toán xử lý ảnh trên Dataset")
-    parser.add_argument("--samples", type=int, default=30, help="Số lượng ảnh lấy mẫu ngẫu nhiên (mặc định: 30)")
+    parser.add_argument("--samples", type=int, default=50, help="Số lượng ảnh đầu tiên lấy từ tập dữ liệu (mặc định: 50)")
     parser.add_argument("--output", type=str, default="outputs/benchmark_results.csv", help="Đường dẫn file CSV xuất ra")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed cố định để tái lập kết quả (mặc định: 42)")
     args = parser.parse_args()
 
     print("=" * 80)
     print("  🔬 BATCH BENCHMARK: SO SÁNH 4 THUẬT TOÁN XỬ LÝ ẢNH THIẾU SÁNG")
     print("=" * 80)
     print(f"  • Số lượng mẫu kiểm thử : {args.samples}")
-    print(f"  • Tệp báo cáo xuất ra    : {args.output}")
+    print(f"  • Random seed cố định   : {args.seed}")
+    print(f"  • Tệp báo cáo xuất ra   : {args.output}")
     print("-" * 80)
 
     config = AppConfig()
@@ -49,15 +52,16 @@ def main():
         print("  [Cảnh báo] Dataset rỗng! Sẽ sử dụng ảnh tổng hợp giả lập để kiểm thử logic.")
 
     print("\n  >> Đang tiến hành chạy thử nghiệm (quá trình có thể mất từ 1-3 phút)...")
-    res = pipeline.run_batch_benchmark(num_samples=args.samples, output_csv_path=args.output)
+    res = pipeline.run_batch_benchmark(num_samples=args.samples, output_csv_path=args.output, base_seed=args.seed)
 
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 92)
     print("  🏆 KẾT QUẢ ĐÁNH GIÁ TỔNG QUAN (BENCHMARK SUMMARY)")
-    print("=" * 80)
-    print(f"{'Thuật toán':<25} | {'PSNR TB (dB)':<15} | {'SSIM TB':<12} | {'NIQE TB':<12}")
-    print("-" * 75)
+    print("=" * 92)
+    print(f"{'Thuật toán':<28} | {'PSNR TB (dB)':<13} | {'SSIM TB':<10} | {'NIQE TB':<10} | {'Time TB (ms)':<12}")
+    print("-" * 92)
 
     names = {
+        "input_degraded": "Đầu vào suy thoái (Input)",
         "he": "Histogram Equalization (HE)",
         "clahe": "CLAHE (Contrast Limited)",
         "gamma": "Gamma Correction",
@@ -65,9 +69,9 @@ def main():
     }
 
     for k, avg in res["averages"].items():
-        print(f"{names.get(k, k):<25} | {avg['avg_psnr']:<15} | {avg['avg_ssim']:<12} | {avg['avg_niqe']:<12}")
+        print(f"{names.get(k, k):<28} | {avg['avg_psnr']:<13} | {avg['avg_ssim']:<10} | {avg['avg_niqe']:<10} | {avg.get('avg_time_ms', 0.0):<12}")
 
-    print("-" * 75)
+    print("-" * 92)
     print(f"  • Thời gian hoàn thành : {res['elapsed_seconds']} giây")
     print(f"  • Báo cáo chi tiết lưu tại : {res['output_csv']}")
     print("=" * 80)

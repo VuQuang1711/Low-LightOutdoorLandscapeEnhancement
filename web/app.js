@@ -615,52 +615,65 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const m = data?.methods || {};
+      const isLight = document.body.classList.contains("theme-light");
       function normMetric(val, min, max, invert = false) {
-        if (val === null || val === undefined || isNaN(val)) return 50;
+        if (val === null || val === undefined || isNaN(val)) return 0;
         let ratio = (val - min) / (max - min || 1);
         ratio = Math.max(0, Math.min(1, ratio));
-        return invert ? (1 - ratio) * 100 : ratio * 100;
+        return Math.round((invert ? (1 - ratio) * 100 : ratio * 100) * 10) / 10;
       }
+
+      // Chuẩn hóa tốc độ theo thang log10 để phản ánh đúng cả thuật toán real-time (~3-10ms) lẫn MSR (~2000ms)
+      function normLatency(ms) {
+        if (ms === null || ms === undefined || isNaN(ms)) return 0;
+        const logVal = Math.log10(Math.max(1, ms)); // 0 (1ms) -> 3.5 (~3162ms)
+        return normMetric(logVal, 0.3, 3.6, true);
+      }
+
+      // Chuẩn hóa NIQE theo miền Mittal thực tế [1.5 -> 25.0] (càng nhỏ điểm radar càng cao)
+      function normNiqe(niqeVal) {
+        return normMetric(niqeVal, 1.5, 25.0, true);
+      }
+
+      const hasGt = Boolean(data?.ground_truth_available);
+      const buildMethodData = (methodObj) => [
+        hasGt ? normMetric(methodObj?.metrics?.psnr, 5.0, 25.0) : 0,
+        hasGt ? normMetric(methodObj?.metrics?.ssim, 0.0, 1.0) : 0,
+        normNiqe(methodObj?.metrics?.niqe),
+        normLatency(methodObj?.exec_time_ms)
+      ];
 
       state.radarChartInstance = new Chart(ctx, {
         type: "radar",
         data: {
-          labels: ["Tương Đồng Cấu Trúc (SSIM)", "Tự Nhiên Cảnh (NIQE)", "Tốc Độ Xử Lý", "Phục Hồi Sáng"],
+          labels: ["PSNR (dB)", "Cấu Trúc (SSIM)", "Tự Nhiên (1/NIQE)", "Tốc Độ (1/Latency)"],
           datasets: [
             {
+              label: "HE (Baseline)",
+              data: buildMethodData(m.he),
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245, 158, 11, 0.12)",
+              borderWidth: 1.5
+            },
+            {
               label: "CLAHE",
-              data: [
-                normMetric(m.clahe?.metrics?.ssim, 0.5, 0.98),
-                normMetric(m.clahe?.metrics?.niqe, 2.0, 10.0, true),
-                normMetric(m.clahe?.exec_time_ms, 5, 250, true),
-                88
-              ],
+              data: buildMethodData(m.clahe),
               borderColor: "#3b82f6",
               backgroundColor: "rgba(59, 130, 246, 0.2)",
               borderWidth: 2
             },
             {
-              label: "MSR",
-              data: [
-                normMetric(m.msr?.metrics?.ssim, 0.5, 0.98),
-                normMetric(m.msr?.metrics?.niqe, 2.0, 10.0, true),
-                normMetric(m.msr?.exec_time_ms, 5, 250, true),
-                94
-              ],
-              borderColor: "#8b5cf6",
-              backgroundColor: "rgba(139, 92, 246, 0.1)",
+              label: "Gamma",
+              data: buildMethodData(m.gamma),
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.14)",
               borderWidth: 1.5
             },
             {
-              label: "Gamma",
-              data: [
-                normMetric(m.gamma?.metrics?.ssim, 0.5, 0.98),
-                normMetric(m.gamma?.metrics?.niqe, 2.0, 10.0, true),
-                normMetric(m.gamma?.exec_time_ms, 5, 250, true),
-                75
-              ],
-              borderColor: "#10b981",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              label: "MSR",
+              data: buildMethodData(m.msr),
+              borderColor: "#8b5cf6",
+              backgroundColor: "rgba(139, 92, 246, 0.14)",
               borderWidth: 1.5
             }
           ]
@@ -669,13 +682,13 @@ document.addEventListener("DOMContentLoaded", () => {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: "bottom", labels: { color: "#94a3b8", boxWidth: 10, font: { size: 10 } } }
+            legend: { position: "bottom", labels: { color: isLight ? "#334155" : "#94a3b8", boxWidth: 10, font: { size: 10 } } }
           },
           scales: {
             r: {
-              angleLines: { color: "rgba(255, 255, 255, 0.08)" },
-              grid: { color: "rgba(255, 255, 255, 0.08)" },
-              pointLabels: { color: "#94a3b8", font: { size: 10 } },
+              angleLines: { color: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)" },
+              grid: { color: isLight ? "rgba(0, 0, 0, 0.08)" : "rgba(255, 255, 255, 0.08)" },
+              pointLabels: { color: isLight ? "#334155" : "#94a3b8", font: { size: 10 } },
               ticks: { display: false, max: 100, min: 0 }
             }
           }
@@ -1042,33 +1055,51 @@ document.addEventListener("DOMContentLoaded", () => {
       defense: `<b>Hỏi:</b> <i>'MSR đạt chất lượng hình ảnh cao nhưng thời gian chạy lâu, làm sao ứng dụng?'</i><br><b>Đáp:</b> MSR xuất sắc trong các bài toán không đòi hỏi thời gian thực như xử lý ảnh vệ tinh, ảnh y tế MRI/X-ray, hậu kỳ nhiếp ảnh nghệ thuật. Trong thực tế, có thể tăng tốc MSR gấp 50-100 lần bằng biến đổi FFT hoặc lập trình CUDA trên GPU.`
     }),
 
-    psnr_kpi: (s) => ({
-      title: "📊 Chỉ Số PSNR (Peak Signal-to-Noise Ratio)",
-      math: `$$\\text{MSE} = \\frac{1}{MN}\\sum_{i,j}[I_{\\text{clean}}(i,j) - I_{\\text{proc}}(i,j)]^2, \\quad \\text{PSNR} = 10\\log_{10}\\left(\\frac{255^2}{\\text{MSE}}\\right)$$`,
-      live: `Thuật toán đạt PSNR cao nhất: <b>HE</b> (<span class="xai-val">${s.he.psnr} dB</span>). Ảnh suy thoái đầu vào: <span class="xai-val">${s.inputDegraded.psnr} dB</span>.`,
-      defense: `<b>Hỏi:</b> <i>'Tại sao PSNR cao không đồng nghĩa với ảnh đẹp tự nhiên?'</i><br><b>Đáp:</b> PSNR chỉ đo sai số bình phương trung bình từng pixel độc lập, không phản ánh cách mắt người nhận thức tương phản và cấu trúc. Việc nâng độ sáng trung bình lên gần ảnh gốc làm giảm MSE và đẩy PSNR lên cao dù ảnh bị cháy sáng bệt màu.`
-    }),
+    psnr_kpi: (s) => {
+      const bp = state.lastResponseData?.rankings?.best_psnr;
+      const winName = bp?.name || "N/A";
+      const winVal = bp ? `${safeNum(bp.value, 2)} dB` : "N/A";
+      return {
+        title: "📊 Chỉ Số PSNR (Peak Signal-to-Noise Ratio)",
+        math: `$$\\text{MSE} = \\frac{1}{MN}\\sum_{i,j}[I_{\\text{clean}}(i,j) - I_{\\text{proc}}(i,j)]^2, \\quad \\text{PSNR} = 10\\log_{10}\\left(\\frac{255^2}{\\text{MSE}}\\right)$$`,
+        live: `Thuật toán đạt PSNR cao nhất trên ảnh hiện tại: <b>${winName}</b> (<span class="xai-val">${winVal}</span>). Ảnh suy thoái đầu vào: <span class="xai-val">${s.inputDegraded.psnr} dB</span>.`,
+        defense: `<b>Hỏi:</b> <i>'Tại sao PSNR cao không đồng nghĩa với ảnh đẹp tự nhiên?'</i><br><b>Đáp:</b> PSNR chỉ đo sai số bình phương trung bình từng pixel độc lập, không phản ánh cách mắt người nhận thức tương phản và cấu trúc. Việc nâng độ sáng trung bình lên gần ảnh gốc làm giảm MSE và đẩy PSNR lên cao dù ảnh bị cháy sáng bệt màu.`
+      };
+    },
 
-    ssim_kpi: (s) => ({
-      title: "📊 Chỉ Số Cấu Trúc SSIM (Structural Similarity Index)",
-      math: `$$\\text{SSIM}(x, y) = \\frac{(2\\mu_x\\mu_y + C_1)(2\\sigma_{xy} + C_2)}{(\\mu_x^2 + \\mu_y^2 + C_1)(\\sigma_x^2 + \\sigma_y^2 + C_2)}$$ Kết hợp 3 yếu tố: độ chói, tương phản và cấu trúc hình học.`,
-      live: `Thuật toán dẫn đầu cấu trúc: <b>MSR</b> (<span class="xai-val">SSIM = ${s.msr.ssim}</span>, tăng <span class="xai-val">${safeDiff(s.msr.ssim, s.inputDegraded.ssim, 4)}</span> so với ảnh suy thoái).`,
-      defense: `<b>Hỏi:</b> <i>'Tại sao SSIM được hội đồng đánh giá cao hơn PSNR?'</i><br><b>Đáp:</b> Vì SSIM mô phỏng cơ chế thị giác người HVS, đánh giá chính xác khả năng bảo tồn các cạnh sắc nét, kết cấu tán cây, mái nhà và đường chân trời sau khi kéo sáng.`
-    }),
+    ssim_kpi: (s) => {
+      const bs = state.lastResponseData?.rankings?.best_ssim;
+      const winName = bs?.name || "N/A";
+      const winVal = bs ? safeNum(bs.value, 4) : "N/A";
+      return {
+        title: "📊 Chỉ Số Cấu Trúc SSIM (Structural Similarity Index)",
+        math: `$$\\text{SSIM}(x, y) = \\frac{(2\\mu_x\\mu_y + C_1)(2\\sigma_{xy} + C_2)}{(\\mu_x^2 + \\mu_y^2 + C_1)(\\sigma_x^2 + \\sigma_y^2 + C_2)}$$ Kết hợp 3 yếu tố: độ chói, tương phản và cấu trúc hình học.`,
+        live: `Thuật toán dẫn đầu cấu trúc trên ảnh hiện tại: <b>${winName}</b> (<span class="xai-val">SSIM = ${winVal}</span>, tăng <span class="xai-val">${safeDiff(bs?.value, s.inputDegraded.ssim, 4)}</span> so với ảnh suy thoái).`,
+        defense: `<b>Hỏi:</b> <i>'Tại sao SSIM được hội đồng đánh giá cao hơn PSNR?'</i><br><b>Đáp:</b> Vì SSIM mô phỏng cơ chế thị giác người HVS, đánh giá chính xác khả năng bảo tồn các cạnh sắc nét, kết cấu tán cây, mái nhà và đường chân trời sau khi kéo sáng.`
+      };
+    },
 
-    niqe_kpi: (s) => ({
-      title: "📊 Chỉ Số Tự Nhiên Không Tham Chiếu (NIQE)",
-      math: `Khoảng cách Mahalanobis so với mô hình phân phối Gauss tổng quát bất đối xứng AGGD của tập ảnh tự nhiên chuẩn (Pristine Corpus): $$D = \\sqrt{(\\nu_1 - \\nu_2)^T \\Sigma^{-1} (\\nu_1 - \\nu_2)}$$`,
-      live: `Chỉ số tự nhiên tốt nhất: <b>CLAHE</b> (<span class="xai-val">NIQE = ${s.clahe.niqe}</span>). Điểm số ảnh suy thoái: <span class="xai-val">${s.inputDegraded.niqe}</span>.`,
-      defense: `<b>Hỏi:</b> <i>'Ý nghĩa thực tiễn của NIQE khi người dùng tự upload ảnh ngoài đời là gì?'</i><br><b>Đáp:</b> Với ảnh thực tế không có Ground Truth, không thể tính PSNR hay SSIM. NIQE là thước đo khoa học khách quan duy nhất để tự động đánh giá và xếp hạng chất lượng ảnh sau nâng cao.`
-    }),
+    niqe_kpi: (s) => {
+      const bn = state.lastResponseData?.rankings?.best_niqe;
+      const winName = bn?.name || "N/A";
+      const winVal = bn ? safeNum(bn.value, 2) : "--";
+      return {
+        title: "📊 Chỉ Số Tự Nhiên Không Tham Chiếu (NIQE)",
+        math: `Khoảng cách Mahalanobis so với mô hình phân phối Gauss tổng quát bất đối xứng AGGD của tập ảnh tự nhiên chuẩn (Pristine Corpus): $$D = \\sqrt{(\\nu_1 - \\nu_2)^T \\left(\\frac{\\Sigma_1 + \\Sigma_2}{2}\\right)^{-1} (\\nu_1 - \\nu_2)}$$`,
+        live: `Chỉ số tự nhiên tốt nhất trên ảnh hiện tại: <b>${winName}</b> (<span class="xai-val">NIQE = ${winVal}</span>). Điểm số ảnh suy thoái: <span class="xai-val">${s.inputDegraded.niqe}</span>.`,
+        defense: `<b>Hỏi:</b> <i>'Ý nghĩa thực tiễn của NIQE khi người dùng tự upload ảnh ngoài đời là gì?'</i><br><b>Đáp:</b> Với ảnh thực tế không có Ground Truth, không thể tính PSNR hay SSIM. NIQE là thước đo khoa học khách quan duy nhất để tự động đánh giá và xếp hạng chất lượng ảnh sau nâng cao.`
+      };
+    },
 
-    col_psnr: (s) => ({
-      title: "📊 Cột 1: PSNR (Peak Signal-to-Noise Ratio) [Đơn vị: dB]",
-      math: `Tỷ số tín hiệu cực đại trên nhiễu đo lường sai số bình phương trung bình (MSE) giữa ảnh sau xử lý so với ảnh gốc chuẩn (Ground Truth): $$\\text{MSE} = \\frac{1}{M \\cdot N} \\sum_{i=0}^{M-1} \\sum_{j=0}^{N-1} [I_{\\text{clean}}(i, j) - I_{\\text{proc}}(i, j)]^2$$ $$\\text{PSNR} = 10 \\cdot \\log_{10}\\left(\\frac{255^2}{\\text{MSE}}\\right) = 10 \\cdot \\log_{10}\\left(\\frac{65025}{\\text{MSE}}\\right) \\quad (\\text{dB})$$`,
-      live: `Bảng đo lường hiện thời: <b>HE</b> đạt PSNR = <span class="xai-val">${s.he.psnr} dB</span> (cao nhất), <b>MSR</b> (<span class="xai-val">${s.msr.psnr} dB</span>), <b>Gamma</b> (<span class="xai-val">${s.gamma.psnr} dB</span>), và <b>CLAHE</b> (<span class="xai-val">${s.clahe.psnr} dB</span>). Mức sàn ảnh suy thoái đầu vào: <span class="xai-val">${s.inputDegraded.psnr} dB</span>.`,
-      defense: `<b>Hỏi:</b> <i>'Tại sao PSNR trong bài toán ảnh đêm thường chỉ dao động từ 10 - 20 dB (thấp hơn ngưỡng 30 dB thông thường)?'</i><br><b>Đáp:</b> Trong xử lý nén/truyền dẫn ảnh, ảnh gốc và ảnh nén có cùng độ sáng trung bình nên PSNR dễ &gt; 30 dB. Ngược lại, trong bài toán kéo sáng, toàn bộ phân phối mức xám được dịch chuyển và kéo giãn mạnh ra khỏi ảnh tối ban đầu; do phép so sánh pixel-by-pixel bị ảnh hưởng mạnh bởi độ lệch mức xám trung bình nên PSNR ở mức 10 - 20 dB là hoàn toàn bình thường và hợp lý.`
-    }),
+    col_psnr: (s) => {
+      const bp = state.lastResponseData?.rankings?.best_psnr;
+      return {
+        title: "📊 Cột 1: PSNR (Peak Signal-to-Noise Ratio) [Đơn vị: dB]",
+        math: `Tỷ số tín hiệu cực đại trên nhiễu đo lường sai số bình phương trung bình (MSE) giữa ảnh sau xử lý so với ảnh gốc chuẩn (Ground Truth): $$\\text{MSE} = \\frac{1}{M \\cdot N} \\sum_{i=0}^{M-1} \\sum_{j=0}^{N-1} [I_{\\text{clean}}(i, j) - I_{\\text{proc}}(i, j)]^2$$ $$\\text{PSNR} = 10 \\cdot \\log_{10}\\left(\\frac{255^2}{\\text{MSE}}\\right) = 10 \\cdot \\log_{10}\\left(\\frac{65025}{\\text{MSE}}\\right) \\quad (\\text{dB})$$`,
+        live: `Dẫn đầu: <b>${bp?.name || 'N/A'}</b>. Chi tiết: HE (<span class="xai-val">${s.he.psnr} dB</span>), MSR (<span class="xai-val">${s.msr.psnr} dB</span>), Gamma (<span class="xai-val">${s.gamma.psnr} dB</span>), CLAHE (<span class="xai-val">${s.clahe.psnr} dB</span>). Suy thoái: <span class="xai-val">${s.inputDegraded.psnr} dB</span>.`,
+        defense: `<b>Hỏi:</b> <i>'Tại sao PSNR trong bài toán ảnh đêm thường chỉ dao động từ 10 - 20 dB (thấp hơn ngưỡng 30 dB thông thường)?'</i><br><b>Đáp:</b> Trong xử lý nén/truyền dẫn ảnh, ảnh gốc và ảnh nén có cùng độ sáng trung bình nên PSNR dễ &gt; 30 dB. Ngược lại, trong bài toán kéo sáng, toàn bộ phân phối mức xám được dịch chuyển và kéo giãn mạnh ra khỏi ảnh tối ban đầu; do phép so sánh pixel-by-pixel bị ảnh hưởng mạnh bởi độ lệch mức xám trung bình nên PSNR ở mức 10 - 20 dB là hoàn toàn bình thường và hợp lý.`
+      };
+    },
 
     col_delta_psnr: (s) => ({
       title: "📈 Cột 2: &Delta; PSNR = PSNR(Output) - PSNR(Input) [dB]",
@@ -1077,26 +1108,32 @@ document.addEventListener("DOMContentLoaded", () => {
       defense: `<b>Hỏi:</b> <i>'Tại sao &Delta;PSNR của CLAHE lại có thể âm trong khi bằng mắt thường ảnh rõ nét hơn rất nhiều?'</i><br><b>Đáp:</b> Nghịch lý này do CLAHE tăng tương phản vi mô cục bộ cực mạnh, đưa các chi tiết tối lên mức xám cao để mắt người quan sát rõ. Tuy nhiên, việc thay đổi mạnh giá trị pixel ở từng vùng làm tăng tổng sai số MSE so với ảnh gốc chuẩn $\\implies \\Delta\\text{PSNR} < 0$. Đây là lý do ngành thị giác máy tính hiện đại không dựa đơn độc vào PSNR mà phải kết hợp chặt chẽ với SSIM và NIQE.`
     }),
 
-    col_ssim: (s) => ({
-      title: "📐 Cột 3: SSIM (Structural Similarity Index) [Dải: 0 &rarr; 1.0]",
-      math: `Mô phỏng trực tiếp hệ thống thị giác người (HVS), đánh giá đồng thời 3 thành phần không gian: Độ chói ($l$), Tương phản ($c$), và Cấu trúc bề mặt ($s$): $$\\text{SSIM}(x, y) = [l(x, y)]^\\alpha \\cdot [c(x, y)]^\\beta \\cdot [s(x, y)]^\\gamma = \\frac{(2\\mu_x\\mu_y + C_1)(2\\sigma_{xy} + C_2)}{(\\mu_x^2 + \\mu_y^2 + C_1)(\\sigma_x^2 + \\sigma_y^2 + C_2)}$$ <b>Giá trị càng gần 1.0 chứng minh cấu trúc bề mặt, tán cây, đồi núi và các đường nét kiến trúc càng được bảo toàn nguyên vẹn.</b>`,
-      live: `Kết quả thực nghiệm: <b>MSR</b> bảo toàn cấu trúc tốt nhất (<span class="xai-val">SSIM = ${s.msr.ssim}</span>), tiếp theo là <b>HE</b> (<span class="xai-val">${s.he.ssim}</span>), <b>Gamma</b> (<span class="xai-val">${s.gamma.ssim}</span>), và <b>CLAHE</b> (<span class="xai-val">${s.clahe.ssim}</span>). Cấu trúc ảnh suy thoái: <span class="xai-val">${s.inputDegraded.ssim}</span>.`,
-      defense: `<b>Hỏi:</b> <i>'Vì sao SSIM là chỉ số chuẩn mực vàng (Gold Standard) cho bài toán phục hồi ảnh?'</i><br><b>Đáp:</b> Mắt người không đếm sai số từng pixel như PSNR mà nhận diện vật thể dựa vào mối tương quan cấu trúc không gian giữa các pixel lân cận (Structural Information). SSIM loại bỏ ảnh hưởng của việc tăng giảm ánh sáng đồng nhất, tập trung đo lường độ trung thực của các đường nét và cạnh biên.`
-    }),
+    col_ssim: (s) => {
+      const bs = state.lastResponseData?.rankings?.best_ssim;
+      return {
+        title: "📐 Cột 3: SSIM (Structural Similarity Index) [Dải: 0 &rarr; 1.0]",
+        math: `Mô phỏng trực tiếp hệ thống thị giác người (HVS), đánh giá đồng thời 3 thành phần không gian: Độ chói ($l$), Tương phản ($c$), và Cấu trúc bề mặt ($s$): $$\\text{SSIM}(x, y) = [l(x, y)]^\\alpha \\cdot [c(x, y)]^\\beta \\cdot [s(x, y)]^\\gamma = \\frac{(2\\mu_x\\mu_y + C_1)(2\\sigma_{xy} + C_2)}{(\\mu_x^2 + \\mu_y^2 + C_1)(\\sigma_x^2 + \\sigma_y^2 + C_2)}$$ <b>Giá trị càng gần 1.0 chứng minh cấu trúc bề mặt, tán cây, đồi núi và các đường nét kiến trúc càng được bảo toàn nguyên vẹn.</b>`,
+        live: `Dẫn đầu cấu trúc: <b>${bs?.name || 'N/A'}</b>. Chi tiết: MSR (<span class="xai-val">${s.msr.ssim}</span>), Gamma (<span class="xai-val">${s.gamma.ssim}</span>), CLAHE (<span class="xai-val">${s.clahe.ssim}</span>), HE (<span class="xai-val">${s.he.ssim}</span>). Ảnh suy thoái: <span class="xai-val">${s.inputDegraded.ssim}</span>.`,
+        defense: `<b>Hỏi:</b> <i>'Vì sao SSIM là chỉ số chuẩn mực vàng (Gold Standard) cho bài toán phục hồi ảnh?'</i><br><b>Đáp:</b> Mắt người không đếm sai số từng pixel như PSNR mà nhận diện vật thể dựa vào mối tương quan cấu trúc không gian giữa các pixel lân cận (Structural Information). SSIM loại bỏ ảnh hưởng của việc tăng giảm ánh sáng đồng nhất, tập trung đo lường độ trung thực của các đường nét và cạnh biên.`
+      };
+    },
 
     col_delta_ssim: (s) => ({
       title: "📈 Cột 4: &Delta; SSIM = SSIM(Output) - SSIM(Input)",
       math: `Đo lường mức độ khôi phục cấu trúc hình học thực sự mà thuật toán mang lại so với ảnh suy thoái đầu vào: $$\\Delta\\text{SSIM} = \\text{SSIM}_{\\text{output}} - \\text{SSIM}_{\\text{input}}$$ &bull; $\\Delta\\text{SSIM} > 0$: Cấu trúc được khôi phục, chi tiết ẩn trong bóng tối được cứu vãn;<br>&bull; $\\Delta\\text{SSIM} \\le 0$: Thuật toán làm nát cấu trúc, cháy biên hoặc nhòe hình.`,
-      live: `Hiện tại: <b>MSR</b> tăng vọt <span class="xai-val">&Delta;SSIM = ${safeDiff(s.msr.ssim, s.inputDegraded.ssim, 4)}</span> (từ ${s.inputDegraded.ssim} lên ${s.msr.ssim}), <b>HE</b> tăng <span class="xai-val">${safeDiff(s.he.ssim, s.inputDegraded.ssim, 4)}</span>, <b>Gamma</b> tăng <span class="xai-val">${safeDiff(s.gamma.ssim, s.inputDegraded.ssim, 4)}</span>, <b>CLAHE</b> tăng <span class="xai-val">${safeDiff(s.clahe.ssim, s.inputDegraded.ssim, 4)}</span>.`,
+      live: `Hiện tại: <b>MSR</b> <span class="xai-val">${safeDiff(s.msr.ssim, s.inputDegraded.ssim, 4)}</span>, <b>HE</b> <span class="xai-val">${safeDiff(s.he.ssim, s.inputDegraded.ssim, 4)}</span>, <b>Gamma</b> <span class="xai-val">${safeDiff(s.gamma.ssim, s.inputDegraded.ssim, 4)}</span>, <b>CLAHE</b> <span class="xai-val">${safeDiff(s.clahe.ssim, s.inputDegraded.ssim, 4)}</span>.`,
       defense: `<b>Hỏi:</b> <i>'Nếu một thuật toán cho &Delta;SSIM &le; 0 thì có thể kết luận điều gì?'</i><br><b>Đáp:</b> Nếu $\\Delta\\text{SSIM} \\le 0$, thuật toán đó đã phá hủy cấu trúc hình ảnh (gây cháy sáng mất chi tiết, nhòe biên hoặc làm biến dạng cấu trúc bề mặt) còn nặng nề hơn cả bóng tối ban đầu. Một thuật toán tăng cường ảnh được xem là thành công bắt buộc phải có $\\Delta\\text{SSIM} > 0$.`
     }),
 
-    col_niqe: (s) => ({
-      title: "🌿 Cột 5: NIQE (Naturalness Image Quality Evaluator) [Càng nhỏ càng tốt]",
-      math: `Chỉ số đánh giá độ tự nhiên mù không tham chiếu (Blind No-Reference IQA), đo khoảng cách Mahalanobis so với mô hình phân phối Gauss tổng quát bất đối xứng (AGGD) của tập ảnh tự nhiên chuẩn (Pristine Corpus): $$D(\\nu_1, \\nu_2, \\Sigma_1, \\Sigma_2) = \\sqrt{ (\\nu_1 - \\nu_2)^T \\left( \\frac{\\Sigma_1 + \\Sigma_2}{2} \\right)^{-1} (\\nu_1 - \\nu_2) }$$ <b>QUY TẮC BẮT BUỘC: ĐIỂM CÀNG THẤP THÌ ẢNH CÀNG TỰ NHIÊN, CÀNG ĐẸP!</b> (2.5 - 5.5: rất tự nhiên; trên 8.0: giả tạo/nhiễu).`,
-      live: `Xếp hạng độ tự nhiên: <b>CLAHE</b> (<span class="xai-val">NIQE = ${s.clahe.niqe}</span> - tự nhiên nhất), <b>Gamma</b> (<span class="xai-val">${s.gamma.niqe}</span>), <b>MSR</b> (<span class="xai-val">${s.msr.niqe}</span>), <b>HE</b> (<span class="xai-val">${s.he.niqe}</span>). Ảnh suy thoái đầu vào: <span class="xai-val">${s.inputDegraded.niqe}</span>.`,
-      defense: `<b>Hỏi:</b> <i>'Khi người dùng tải lên ảnh chụp thực tế ngoài đời (không có ảnh gốc Ground Truth) thì bảng đo lường này xử lý thế nào?'</i><br><b>Đáp:</b> Khi không có ảnh gốc, các chỉ số tham chiếu PSNR và SSIM sẽ tự động bị ẩn (N/A). Hệ thống chuyển trọng tâm sang chỉ số NIQE độc lập để định lượng mức độ sắc nét và tính tự nhiên, đảm bảo thuật toán không sinh ra viền sáng giả (halos) hay nhiễu hạt nhân tạo.`
-    }),
+    col_niqe: (s) => {
+      const bn = state.lastResponseData?.rankings?.best_niqe;
+      return {
+        title: "🌿 Cột 5: NIQE (Naturalness Image Quality Evaluator) [Càng nhỏ càng tốt]",
+        math: `Chỉ số đánh giá độ tự nhiên mù không tham chiếu (Blind No-Reference IQA), đo khoảng cách Mahalanobis so với mô hình phân phối Gauss tổng quát bất đối xứng (AGGD) của tập ảnh tự nhiên chuẩn (Pristine Corpus): $$D(\\nu_1, \\nu_2, \\Sigma_1, \\Sigma_2) = \\sqrt{ (\\nu_1 - \\nu_2)^T \\left( \\frac{\\Sigma_1 + \\Sigma_2}{2} \\right)^{-1} (\\nu_1 - \\nu_2) }$$ <b>QUY TẮC BẮT BUỘC: ĐIỂM CÀNG THẤP THÌ ẢNH CÀNG TỰ NHIÊN, CÀNG ĐẸP!</b>`,
+        live: `Tự nhiên nhất: <b>${bn?.name || 'N/A'}</b>. Chi tiết: CLAHE (<span class="xai-val">${s.clahe.niqe}</span>), Gamma (<span class="xai-val">${s.gamma.niqe}</span>), MSR (<span class="xai-val">${s.msr.niqe}</span>), HE (<span class="xai-val">${s.he.niqe}</span>). Ảnh suy thoái: <span class="xai-val">${s.inputDegraded.niqe}</span>.`,
+        defense: `<b>Hỏi:</b> <i>'Khi người dùng tải lên ảnh chụp thực tế ngoài đời (không có ảnh gốc Ground Truth) thì bảng đo lường này xử lý thế nào?'</i><br><b>Đáp:</b> Khi không có ảnh gốc, các chỉ số tham chiếu PSNR và SSIM sẽ tự động bị ẩn (N/A). Hệ thống chuyển trọng tâm sang chỉ số NIQE độc lập để định lượng mức độ sắc nét và tính tự nhiên, đảm bảo thuật toán không sinh ra viền sáng giả (halos) hay nhiễu hạt nhân tạo.`
+      };
+    },
 
     col_delta_niqe: (s) => ({
       title: "📉 Cột 6: &Delta; NIQE = NIQE(Output) - NIQE(Input) [Quy ước dấu âm là tốt]",
@@ -1482,6 +1519,9 @@ document.addEventListener("DOMContentLoaded", () => {
     paneDataset.classList.add("active");
     paneUpload.classList.remove("active");
     state.isCustomUpload = false;
+    // Khôi phục mô phỏng thiếu sáng cho Giao thức 1 (tập dữ liệu ban ngày)
+    chkSimulateLowLight.checked = true;
+    lowLightSettings.style.display = "block";
   });
 
   tabUpload.addEventListener("click", () => {
@@ -1562,6 +1602,9 @@ document.addEventListener("DOMContentLoaded", () => {
     reader.onload = (event) => {
       state.customFileB64 = event.target.result;
       state.isCustomUpload = true;
+      // Giao thức 2: Tự động vô hiệu hóa mô phỏng thiếu sáng khi tải ảnh thực tế
+      chkSimulateLowLight.checked = false;
+      lowLightSettings.style.display = "none";
       uploadFileName.textContent = file.name;
       uploadPreviewRow.style.display = "flex";
       executePipeline();
@@ -1692,6 +1735,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Render summary cards
       batchStatsRow.innerHTML = "";
       const names = {
+        input_degraded: "Đầu vào suy thoái",
         he: "HE",
         clahe: "CLAHE",
         gamma: "Gamma",
@@ -1707,6 +1751,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div>PSNR TB: <b>${avg.avg_psnr} dB</b></div>
             <div>SSIM TB: <b>${avg.avg_ssim}</b></div>
             <div>NIQE TB: <b>${avg.avg_niqe}</b></div>
+            <div>Thời gian TB: <b>${avg.avg_time_ms ?? "--"} ms</b></div>
           </div>
         `;
         batchStatsRow.appendChild(card);
